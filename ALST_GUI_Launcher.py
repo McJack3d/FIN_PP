@@ -8,7 +8,7 @@ def run_predictor():
     try:
         # Run the predictor script and capture output
         result = subprocess.run(
-            [sys.executable, "/Users/alexandrebredillot/Desktop/AI/ALST_Ticker_Predictor.py"],
+            [sys.executable, "/Users/alexandrebredillot/Documents/GitHub/FIN_PP/ALST_Ticker_Predictor_Final.py"],
             capture_output=True, text=True, check=True
         )
         messagebox.showinfo("Prediction Result", result.stdout)
