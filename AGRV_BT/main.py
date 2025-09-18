@@ -1,5 +1,4 @@
-# aggressive_bot.py
-# Supports TESTNET and PAPER_TRADING (set PAPER_TRADING=true in .env to simulate without private API).
+# Runs on Binance TESTNET (demo) when TESTNET=true. No local paper-trading simulation.
 import os, time, math, logging, re
 from dotenv import load_dotenv, find_dotenv
 import ccxt
@@ -33,27 +32,19 @@ if len(API_SECRET) < 30:
 
 # --- Runtime toggles from .env ---
 TESTNET = (os.getenv('TESTNET', 'true').lower() == 'true')
-PAPER_TRADING = (os.getenv('PAPER_TRADING', 'false').lower() == 'true')
-try:
-    PAPER_USDT_START = float(os.getenv('PAPER_USDT', '10000'))
-except Exception:
-    PAPER_USDT_START = 10000.0
 
-# local state for paper mode
-paper_balance_usdt = PAPER_USDT_START
-auth_blocked = False  # set True if we detect -2015
-
-# Simulate orders only: use real public endpoints and (optionally) real balance,
-# but do NOT send private create_order() calls. Useful to test order logic
-# while still using the live market data.
-SIMULATE_ORDERS_ONLY = (os.getenv('SIMULATE_ORDERS_ONLY', 'false').lower() == 'true')
-
-# store simulated orders when SIMULATE_ORDERS_ONLY is enabled
-simulated_orders = []
+# auth flag: set True if we detect -2015
+auth_blocked = False
 
 # ---------- CONFIG ----------
-EXCHANGE_ID = "binance"   # exemple ; utilise testnet/paper si possible
-SYMBOL = "BTC/USDT"
+EXCHANGE_ID = "binance"   # ccxt ID for spot; testnet via set_sandbox_mode(True)
+SYMBOLS = [
+    "BTC/USDT",
+    "ETH/USDT",
+    # add/remove pairs as needed
+]
+# default symbol kept for backward compatibility in some logs
+SYMBOL = SYMBOLS[0]
 TIMEFRAME = "1m"
 RISK_PCT = 0.02           # % capital par trade (2%)
 MAX_DAILY_LOSS_PCT = 0.05 # stop global si perte 5% cap
@@ -66,6 +57,14 @@ LOG_FILE = "aggr_bot.log"
 
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s")
+
+# Also log to console so smoke test feedback is visible immediately
+_root = logging.getLogger()
+if not any(isinstance(h, logging.StreamHandler) for h in _root.handlers):
+    _ch = logging.StreamHandler()
+    _ch.setLevel(logging.INFO)
+    _ch.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    _root.addHandler(_ch)
 
 exchange = ccxt.binance({
     'apiKey': API_KEY,
@@ -94,37 +93,27 @@ def check_connection():
     logging.info(f"API key loaded? len={len(ak)}, suffix={ak[-4:] if ak else 'None'}")
     sk = API_SECRET or ''
     logging.info(f"API secret loaded? len={len(sk)}, suffix={sk[-4:] if sk else 'None'}")
-    if PAPER_TRADING:
-        logging.info(f"PAPER_TRADING enabled. Using simulated balance: {PAPER_USDT_START} USDT. Skipping private auth checks.")
-        try:
-            ping = exchange.publicGetPing()
-            logging.info(f"Testnet/public ping OK (paper): {ping}")
-        except Exception as e:
-            logging.exception("Public ping failed even in paper mode")
-        try:
-            info = exchange.publicGetExchangeInfo()
-            logging.info(f"ExchangeInfo OK (paper): {len(info.get('symbols', []))} symbols")
-        except Exception as e:
-            logging.exception("publicGetExchangeInfo failed in paper mode")
-        return
+
     if not _looks_like_binance_key(API_KEY) or not _looks_like_binance_key(API_SECRET):
         logging.warning("API key/secret format invalid (should be alphanumeric, no quotes/spaces, correct testnet keys).")
+
     try:
         ping = exchange.publicGetPing()
-        logging.info(f"Testnet ping OK: {ping}")
-    except Exception as e:
-        logging.exception("Public ping failed on testnet")
+        logging.info(f"Exchange ping OK: {ping}")
+    except Exception:
+        logging.exception("Public ping failed")
 
     try:
         info = exchange.publicGetExchangeInfo()
         logging.info(f"ExchangeInfo OK (symbols: {len(info.get('symbols', []))})")
-    except Exception as e:
-        logging.exception("publicGetExchangeInfo failed on testnet")
+    except Exception:
+        logging.exception("publicGetExchangeInfo failed")
 
     try:
         b = exchange.fetch_balance()
         usdt = (b.get('total') or {}).get('USDT', 0)
-        logging.info(f"USDT balance (testnet): {usdt}")
+        where = "TESTNET" if TESTNET else "PROD"
+        logging.info(f"USDT balance ({where}): {usdt}")
     except Exception as e:
         msg = str(e)
         if '"code":-2014' in msg or 'API-key format invalid' in msg:
@@ -134,13 +123,11 @@ def check_connection():
             global auth_blocked
             auth_blocked = True
         else:
-            logging.exception("Balance check failed on testnet")
+            logging.exception("Balance check failed")
 
 # Helper: fetch balance USD-equivalent
 def get_usd_balance():
-    global paper_balance_usdt, auth_blocked
-    if PAPER_TRADING:
-        return float(paper_balance_usdt)
+    global auth_blocked
     try:
         bal = exchange.fetch_balance()
         usdt = (bal.get('total') or {}).get('USDT', 0) or (bal.get('free') or {}).get('USDT', 0) or 0
@@ -153,8 +140,40 @@ def get_usd_balance():
             logging.error("fetch_balance auth -2015: Invalid API-key/IP/permissions (check whitelist & permissions).")
             auth_blocked = True
         else:
-            logging.exception("fetch_balance failed on testnet; returning 0 for safety")
+            logging.exception("fetch_balance failed; returning 0 for safety")
         return 0.0
+
+# Ensure order amount respects Binance filters (minNotional, minQty, precision)
+def clamp_amount_to_filters(symbol: str, price: float, amount: float) -> float:
+    try:
+        # Make sure markets are loaded so limits/precision exist
+        if not getattr(exchange, 'markets', None):
+            exchange.load_markets()
+        market = exchange.market(symbol)
+        # Min notional (cost)
+        min_cost = None
+        try:
+            min_cost = (market.get('limits') or {}).get('cost', {}).get('min', None)
+        except Exception:
+            min_cost = None
+        if min_cost is not None and price is not None:
+            if amount * price < float(min_cost):
+                amount = (float(min_cost) / price) * 1.001  # small safety buffer
+        # Min quantity (amount)
+        min_qty = None
+        try:
+            min_qty = (market.get('limits') or {}).get('amount', {}).get('min', None)
+        except Exception:
+            min_qty = None
+        if min_qty is not None:
+            if amount < float(min_qty):
+                amount = float(min_qty)
+        # Apply exchange precision rounding using ccxt helper
+        amount = float(exchange.amount_to_precision(symbol, amount))
+        return max(0.0, amount)
+    except Exception:
+        logging.exception("Failed to clamp amount to filters; returning original amount")
+        return amount
 
 # Risk manager: compute size in quote currency (USDT)
 def compute_order_size(usd_balance, price):
@@ -200,8 +219,8 @@ def can_trade():
         cumulative_lost_since_start = 0.0
     if (datetime.utcnow() - last_order_time).total_seconds() < COOLDOWN_SECONDS:
         return False
-    if auth_blocked and not PAPER_TRADING:
-        logging.warning("Auth blocked (-2015). Enable PAPER_TRADING=true in .env or fix API permissions/IP whitelist.")
+    if auth_blocked:
+        logging.warning("Auth blocked (-2015). Fix API permissions/IP whitelist (and ensure TESTNET keys).")
         return False
     usd_bal = get_usd_balance()
     if usd_bal <= 0:
@@ -214,42 +233,13 @@ def can_trade():
     return True
 
 def place_market_order(symbol, side, amount):
-    # If either full PAPER_TRADING or simulate-orders-only is enabled, simulate order locally.
-    if PAPER_TRADING or SIMULATE_ORDERS_ONLY:
-        try:
-            ticker = exchange.fetch_ticker(symbol)
-            price = float(ticker['last'])
-        except Exception:
-            price = None
-        notional = amount * (price if price else 0.0)
-        side_str = f"[SIMULATED] {side.upper()} {amount} {symbol} @ {price if price else 'NA'} (notional≈{notional:.2f} USDT)"
-        logging.info(side_str)
-
-        # If full paper trading, update the paper balance (real simulation).
-        global paper_balance_usdt, simulated_orders
-        if PAPER_TRADING:
-            if price:
-                if side == 'buy':
-                    paper_balance_usdt = max(0.0, paper_balance_usdt - notional)
-                elif side == 'sell':
-                    paper_balance_usdt = paper_balance_usdt + notional
-            order = {'id': 'paper-order', 'side': side, 'symbol': symbol, 'amount': amount, 'price': price, 'notional': notional, 'simulated': True}
-            simulated_orders.append(order)
-            return order
-
-        # If SIMULATE_ORDERS_ONLY (but not PAPER_TRADING), record simulated order but do NOT alter paper balance.
-        order = {'id': 'sim-only-order', 'side': side, 'symbol': symbol, 'amount': amount, 'price': price, 'notional': notional, 'simulated': True}
-        simulated_orders.append(order)
-        return order
-
-    # Otherwise perform a real order via the exchange
     global last_order_time
     try:
         logging.info(f"Placing market order {side} {amount} {symbol}")
         order = exchange.create_order(symbol, type='market', side=side, amount=amount)
         last_order_time = datetime.utcnow()
         return order
-    except Exception as e:
+    except Exception:
         logging.exception("Order failed")
         return None
 
@@ -263,52 +253,86 @@ def track_and_manage_positions():
         last_price = float(ticker['last'])
         if pos['side'] == 'buy':
             if last_price <= pos['entry'] * (1 - STOP_LOSS_PCT):
-                logging.info(f"Stop loss hit for {sym}. Closing...")
-                # compute size approximate
+                logging.info(f"Stop loss hit for {sym}. Closing long...")
                 place_market_order(sym, 'sell', pos['amount'])
                 pnl = (last_price - pos['entry']) * pos['amount']
                 cumulative_lost_since_start += pnl
+                logging.info(f"{sym} STOP closed PnL={pnl:.6f}")
                 del open_positions[sym]
         elif pos['side'] == 'sell':
             if last_price >= pos['entry'] * (1 + STOP_LOSS_PCT):
-                logging.info(f"Stop loss hit for short {sym}. Closing...")
+                logging.info(f"Stop loss hit for short {sym}. Closing short...")
                 place_market_order(sym, 'buy', pos['amount'])
                 pnl = (pos['entry'] - last_price) * pos['amount']
                 cumulative_lost_since_start += pnl
+                logging.info(f"{sym} SHORT STOP closed PnL={pnl:.6f}")
                 del open_positions[sym]
+
+# Preflight checks to verify connectivity and market readiness without placing orders
+def preflight_checks():
+    try:
+        exchange.load_markets()
+        for sym in SYMBOLS:
+            assert sym in exchange.markets, f"Symbol {sym} not in exchange markets"
+            ticker = exchange.fetch_ticker(sym)
+            _ = ticker.get('last')
+            bars = exchange.fetch_ohlcv(sym, timeframe=TIMEFRAME, limit=10)
+            assert isinstance(bars, list) and len(bars) > 0, f"No OHLCV data for {sym}"
+        bal = get_usd_balance()
+        logging.info(f"[PREFLIGHT] OK: markets loaded, ticker & OHLCV available for {len(SYMBOLS)} symbols, USDT balance={bal}")
+    except Exception:
+        logging.exception("[PREFLIGHT] Failed. Check TESTNET, API keys, or symbols list.")
+        raise
 
 # Main loop
 def main_loop():
     global cumulative_lost_since_start
-    logging.info("Starting aggressive bot in PAPER mode. DO NOT USE WITH REAL MONEY UNTIL TESTED.")
-    logging.info(f"Toggles -> TESTNET={TESTNET}, PAPER_TRADING={PAPER_TRADING}, PAPER_USDT_START={PAPER_USDT_START}")
+    mode = "TESTNET (Binance demo)" if TESTNET else "PROD (REAL MONEY!)"
+    logging.info(f"Starting aggressive bot on {mode}.")
+    logging.info(f"Toggles -> TESTNET={TESTNET}")
+    try:
+        logging.info(f"File: {__file__} | CWD: {os.getcwd()}")
+    except Exception:
+        pass
+    try:
+        logging.info(f"Sandbox active? {getattr(exchange, 'sandbox', None)}")
+        logging.info(f"Base URLs: {getattr(exchange, 'urls', None)}")
+    except Exception:
+        pass
     check_connection()
+    preflight_checks()
     while True:
         try:
             if not can_trade():
                 time.sleep(1)
                 continue
-            usd_bal = get_usd_balance()
-            if PAPER_TRADING and int(time.time()) % 5 == 0:
-                logging.info(f"[PAPER] Simulated USDT balance: {usd_bal}")
-            ticker = exchange.fetch_ticker(SYMBOL)
-            price = float(ticker['last'])
-            signal = simple_momentum_signal(SYMBOL, TIMEFRAME)
-            if signal == "buy":
-                size = compute_order_size(usd_bal, price)
-                if size > 0:
-                    order = place_market_order(SYMBOL, 'buy', size)
-                    if order:
-                        open_positions[SYMBOL] = {'entry': price, 'amount': size, 'side': 'buy', 'ts': datetime.utcnow()}
-            elif signal == "sell":
-                # if have open long, close; else short (dangerous) — here we close longs only
-                if SYMBOL in open_positions and open_positions[SYMBOL]['side'] == 'buy':
-                    amt = open_positions[SYMBOL]['amount']
-                    place_market_order(SYMBOL, 'sell', amt)
-                    pnl = (price - open_positions[SYMBOL]['entry']) * amt
-                    cumulative_lost_since_start += pnl
-                    del open_positions[SYMBOL]
-            # manage stops
+            usd_bal = get_usd_balance()  # fetch once per cycle
+            for sym in SYMBOLS:
+                try:
+                    ticker = exchange.fetch_ticker(sym)
+                    price = float(ticker['last'])
+                    signal = simple_momentum_signal(sym, TIMEFRAME)
+                    if signal == "buy":
+                        size = compute_order_size(usd_bal, price)
+                        size = clamp_amount_to_filters(sym, price, size)
+                        if size > 0 and (size * price) >= MIN_ORDER_USD:
+                            order = place_market_order(sym, 'buy', size)
+                            if order:
+                                open_positions[sym] = {'entry': price, 'amount': size, 'side': 'buy', 'ts': datetime.utcnow()}
+                                logging.info(f"Opened LONG {sym} amt={size} @ {price}")
+                        else:
+                            logging.info(f"{sym}: Buy skipped (size too small after filters/min notional)")
+                    elif signal == "sell":
+                        if sym in open_positions and open_positions[sym]['side'] == 'buy':
+                            amt = open_positions[sym]['amount']
+                            place_market_order(sym, 'sell', amt)
+                            pnl = (price - open_positions[sym]['entry']) * amt
+                            cumulative_lost_since_start += pnl
+                            logging.info(f"Closed LONG {sym} amt={amt} @ {price} PnL={pnl:.6f}")
+                            del open_positions[sym]
+                except Exception:
+                    logging.exception(f"Loop error for symbol {sym}")
+            # manage stops for all symbols
             track_and_manage_positions()
 
             time.sleep(0.5)  # aggressive but allow rate limit
