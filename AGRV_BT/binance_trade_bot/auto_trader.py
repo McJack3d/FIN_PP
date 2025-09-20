@@ -74,13 +74,16 @@ class AutoTrader:
 
                 pair.ratio = from_coin_price / coin_price
 
+    """
+    Initialize the buying threshold of all the coins for trading between them
+    """
     def initialize_trade_thresholds(self):
-        """
-        Initialize the buying threshold of all the coins for trading between them
-        """
         session: Session
         with self.db.db_session() as session:
             for pair in session.query(Pair).filter(Pair.ratio.is_(None)).all():
+                # Add this block at the start of the loop
+                if not pair.from_coin or not pair.to_coin:
+                    continue
                 if not pair.from_coin.enabled or not pair.to_coin.enabled:
                     continue
                 self.logger.info(f"Initializing {pair.from_coin} vs {pair.to_coin}")
@@ -110,6 +113,10 @@ class AutoTrader:
         ratio_dict: Dict[Pair, float] = {}
 
         for pair in self.db.get_pairs_from(coin):
+            # Skip pairs with missing coins
+            if not pair.to_coin or not pair.from_coin:
+                continue
+
             optional_coin_price = self.manager.get_ticker_price(pair.to_coin + self.config.BRIDGE)
 
             if optional_coin_price is None:
@@ -118,7 +125,10 @@ class AutoTrader:
 
             self.db.log_scout(pair, pair.ratio, coin_price, optional_coin_price)
 
-            # Obtain (current coin)/(optional coin)
+            print(f"Calculating ratio: {coin_price} / {optional_coin_price} for {pair.to_coin}")
+            if optional_coin_price == 0:
+                self.logger.info(f"Skipping ratio calculation for {pair.to_coin} due to zero price.")
+                continue
             coin_opt_coin_ratio = coin_price / optional_coin_price
 
             # Fees

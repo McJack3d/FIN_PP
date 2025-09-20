@@ -2,7 +2,6 @@ from sqlalchemy import Boolean, Column, String
 
 from .base import Base
 
-
 class Coin(Base):
     __tablename__ = "coins"
     symbol = Column(String, primary_key=True)
