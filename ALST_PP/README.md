@@ -31,3 +31,5 @@ Predict the future price of Alstom stock.
 	•	Language: Python
 	•	Data source: yfinance (Alstom ticker: "ALO.PA")
 	•	Libraries: pandas, numpy, scikit-learn, matplotlib, seaborn, yfinance
+
+# Project aborted, uneficient precision and knowledge yet for an accurate model

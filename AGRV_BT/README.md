@@ -207,3 +207,5 @@ If you plan to use real money, USE AT YOUR OWN RISK.
 Under no circumstances will I be held responsible or liable in any way for any
 claims, damages, losses, expenses, costs, or liabilities whatsoever, including,
 without limitation, any direct or indirect damages for loss of profits.
+
+# This is a copy, all credits to ccxt on github.
