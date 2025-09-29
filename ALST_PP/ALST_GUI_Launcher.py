@@ -53,15 +53,15 @@ window.geometry("460x360")
  # Form variables
 var_ticker = StringVar(value="ALO.PA")
 var_years = DoubleVar(value=5.0)
-var_horizon = IntVar(value=5)
-var_threshold = DoubleVar(value=0.60)
-var_deadband = DoubleVar(value=0.10)
+var_horizon = IntVar(value=10)
+var_threshold = DoubleVar(value=0.62)
+var_deadband = DoubleVar(value=0.20)
 var_costbps = DoubleVar(value=10.0)
 var_model = StringVar(value="histgb")
 var_calibrate = BooleanVar(value=True)
 var_longonly = BooleanVar(value=True)
-var_regimema = IntVar(value=100)
-var_voltarget = DoubleVar(value=0.01)
+var_regimema = IntVar(value=200)
+var_voltarget = DoubleVar(value=0.006)
 
 label_var = tk.StringVar(value="Configure parameters then run prediction")
 
@@ -218,6 +218,9 @@ def _on_prediction_done(out, err):
 
         # Backtest metrics
         bt = metrics.get('backtest', {}) if isinstance(metrics, dict) else {}
+        bh = metrics.get('buyhold_cum_return')
+        if bh is not None:
+            lines.append(f"Buy&Hold cum. return : {bh*100:.2f}%")
         if bt:
             cr = bt.get('cum_return'); sh = bt.get('sharpe_annual'); hr = bt.get('hit_ratio'); dd = bt.get('max_drawdown'); tr = bt.get('trades')
             if cr is not None:

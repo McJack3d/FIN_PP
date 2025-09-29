@@ -38,10 +38,17 @@ def _compute_obv_from_series(close: pd.Series, volume: pd.Series) -> pd.Series:
     return pd.Series(obv, index=close.index)
 
 
+
 def _pct_change_safe(s: pd.Series, periods: int = 1) -> pd.Series:
     with np.errstate(divide='ignore', invalid='ignore'):
         r = s.pct_change(periods=periods)
     return r.replace([np.inf, -np.inf], np.nan)
+
+
+def _log_forward_return(s: pd.Series, horizon: int) -> pd.Series:
+    """Compute forward log-return over `horizon` days: ln(P_{t+h}/P_t) aligned at t."""
+    ln = np.log(s.astype(float))
+    return (ln.shift(-horizon) - ln)
 
 
 def _download_series(ticker: str, start, end, name: str) -> pd.Series:
@@ -143,7 +150,7 @@ def _signals_from_proba(p: np.ndarray, threshold: float, deadband: float) -> np.
 
 def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFrame, clf_builder, threshold: float, deadband: float,
                            cost_bps: float, calibrate: bool, long_only: bool, regime_ma: int, vol_target: float,
-                           random_state: int = 42):
+                           horizon: int, random_state: int = 42):
     """Walk‑forward backtest that *persists* positions and charges costs on position changes.
     - Build out-of-fold probabilities using TimeSeriesSplit
     - Convert to desired signals via threshold/deadband
@@ -152,7 +159,7 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
     - Apply costs only when position changes; flipping -1->+1 counts as 2 changes
     """
     n_splits = max(3, min(8, len(X) // 80))
-    tscv = TimeSeriesSplit(n_splits=n_splits)
+    tscv = TimeSeriesSplit(n_splits=n_splits, gap=5)
 
     all_idx = []
     all_proba = []
@@ -184,6 +191,12 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
     idx_sorted = idx_oof[order]
     proba_sorted = proba_oof[order]
 
+    # Use non-overlapping steps of length = horizon to avoid overlapping forward returns
+    step = max(1, int(horizon))
+    keep_idx = np.arange(0, len(proba_sorted), step)
+    idx_sorted = idx_sorted[keep_idx]
+    proba_sorted = proba_sorted[keep_idx]
+
     # Desired signals from probability
     desired = _signals_from_proba(proba_sorted, threshold, deadband)  # -1,0,+1
 
@@ -200,33 +213,34 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
         desired = np.where((regime == 1) & (desired < 0), 0, desired)  # no shorts in up regime
         desired = np.where((regime == 0) & (desired > 0), 0, desired)  # no longs in down regime
 
-    # Position persistence
-    pos = np.zeros_like(desired, dtype=float)
-    for i in range(1, len(pos)):
-        if desired[i] == 0:
-            pos[i] = pos[i-1]   # hold last position
-        else:
-            pos[i] = desired[i]
+    # Discrete SIDE in {-1,0,+1} that we will scale later
+    side = np.zeros_like(desired, dtype=float)
+    for i in range(len(side)):
+        side[i] = 0.0 if desired[i] == 0 else float(desired[i])
 
     # Volatility targeting: scale position magnitude by target / realized_vol
     ret1 = ctx['Ret1'].fillna(0.0)
-    realized_vol = ret1.rolling(20).std().replace(0, np.nan).fillna(method='bfill').fillna(method='ffill')
+    realized_vol = ret1.rolling(20).std().replace(0, np.nan).bfill().ffill()
     scale = (vol_target / realized_vol).clip(upper=1.0)
-    pos = pos * scale.values
+    pos = side * scale.values
 
-    # Series aligned to index
-    idx = pd.Index(idx_sorted)
-    pos_s = pd.Series(pos, index=idx, dtype=float)
-    y_s   = y_ret.loc[idx]
+    # Convert forward log-returns to simple returns for block P&L
+    y_block = y_ret.loc[pd.Index(idx_sorted)].values  # forward log-return over `horizon`
+    y_simple_block = np.expm1(y_block)
 
-    # Apply next-period return to *current* position (no look-ahead)
-    pos_shift = pos_s.shift(1).fillna(0.0)
-    strat_ret_gross = pos_shift.values * y_s.values
+    # Apply position *on the same block* (we trade block-to-block; entries at block boundaries)
+    strat_ret_gross = pos * y_simple_block
 
-    # Transaction costs when position changes (per side). Flip counts as 2 * change magnitude.
-    delta_pos = np.abs(pd.Series(pos, index=idx).diff().fillna(pos[0]).values)
+    # Transaction costs when SIDE changes between blocks (per side). Flip -1->+1 counts as 2.
+    side_s = pd.Series(side, index=pd.Index(idx_sorted), dtype=float)
+    delta_side = side_s.diff().fillna(side_s.iloc[0]).abs().values
     cost_rate = cost_bps / 10000.0
-    strat_ret_net = strat_ret_gross - cost_rate * delta_pos
+    strat_ret_net = strat_ret_gross - cost_rate * delta_side
+
+    # Buy&Hold baseline on the same non-overlapping blocks (simple returns)
+    bh_simple = y_simple_block
+    bh_cum = np.cumprod(1 + bh_simple)
+    bh_cum_return = float(bh_cum[-1] - 1) if len(bh_cum) else float('nan')
 
     # Metrics on net returns
     if len(strat_ret_net) == 0:
@@ -250,15 +264,16 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
     dd = cum / peak - 1.0
     max_dd = float(np.min(dd)) if len(dd) else float('nan')
 
-    # Count executed trades as number of nonzero changes (delta_pos>0), flipping counts as 2
-    trades = int(delta_pos.sum())
+    # Count executed trades as number of nonzero SIDE changes (delta_side>0); flip counts as 2
+    trades = int(delta_side.sum())
 
     return {
         'cum_return': cum_return,
         'sharpe_annual': sharpe_annual,
         'hit_ratio': hit_ratio,
         'max_drawdown': max_dd,
-        'trades': trades
+        'trades': trades,
+        'buyhold_cum_return': bh_cum_return
     }
 
 
@@ -279,8 +294,8 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
 
     data, features = _build_features(data, start_date, end_date)
 
-    # Target: forward return over horizon
-    y_ret = _pct_change_safe(data['AdjClose'], horizon).shift(-horizon).dropna()
+    # Target: forward **log-return** over horizon (stabilizes training & avoids compounding bias)
+    y_ret = _log_forward_return(data['AdjClose'], horizon).dropna()
     # Align features with target
     X = data.loc[y_ret.index, features]
     # Context for backtest/regime/vol targeting
@@ -295,7 +310,7 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
 
     # Time-aware CV for metrics
     n_splits = max(3, min(8, len(X) // 80))
-    tscv = TimeSeriesSplit(n_splits=n_splits)
+    tscv = TimeSeriesSplit(n_splits=n_splits, gap=5)
 
     maes, rmses, accs, precs, recs, f1s, aucs = [], [], [], [], [], [], []
 
@@ -345,14 +360,15 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
     else:
         decision = 'UP' if proba_up >= threshold else 'DOWN'
 
-    predicted_price = float(last_close * (1.0 + pred_ret_latest))
+    # pred_ret_latest is a log-return → price = last_close * exp(logret)
+    predicted_price = float(last_close * np.exp(pred_ret_latest))
 
     # Walk-forward backtest with rule
     backtest = _backtest_walk_forward(
         X, y_ret, context, base_clf, threshold, deadband, cost_bps, calibrate, long_only, regime_ma, vol_target,
-        random_state=random_state
+        horizon=horizon, random_state=random_state
     )
-
+    bh_cum_ret = backtest.get('buyhold_cum_return')
     metrics = {
         'reg_mae_cv_mean': float(np.nanmean(maes)),
         'reg_rmse_cv_mean': float(np.nanmean(rmses)),
@@ -363,7 +379,8 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
         'clf_auc_cv_mean': float(np.nanmean(aucs)),
         'cv_splits': int(n_splits),
         'n_obs': int(len(X)),
-        'backtest': backtest
+        'backtest': backtest,
+        'buyhold_cum_return': bh_cum_ret
     }
 
     payload = {
