@@ -129,28 +129,28 @@ def _build_features(df: pd.DataFrame, start_date, end_date) -> tuple[pd.DataFram
 # -----------------------------
 
 def _signals_from_proba(p: np.ndarray, threshold: float, deadband: float) -> np.ndarray:
-    # p ∈ [0,1]. deadband around 0.5; threshold for UP decision
+    """Map probabilities to *desired* signals: -1, 0, +1.
+    0 inside the deadband around 0.5; +1 if >= threshold; -1 otherwise.
+    """
+    p = np.asarray(p)
     sig = np.zeros_like(p)
     centered = p - 0.5
     neutral = np.abs(centered) < deadband
+    # For non-neutral, choose side by threshold; below threshold => DOWN
     sig[~neutral] = np.where(p[~neutral] >= threshold, 1, -1)
-    return sig  # -1, 0, +1
+    return sig  # -1,0,+1 (desired instantaneous signal)
 
 
-def _max_drawdown(cumret: np.ndarray) -> float:
-    peak = -np.inf
-    max_dd = 0.0
-    for x in cumret:
-        if x > peak:
-            peak = x
-        dd = (x/peak - 1.0) if peak != -np.inf else 0.0
-        if dd < max_dd:
-            max_dd = dd
-    return float(max_dd)
-
-
-def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, clf_builder, threshold: float, deadband: float, cost_bps: float, calibrate: bool, random_state: int = 42):
-    # Walk-forward: build out-of-fold probabilities on test slices
+def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFrame, clf_builder, threshold: float, deadband: float,
+                           cost_bps: float, calibrate: bool, long_only: bool, regime_ma: int, vol_target: float,
+                           random_state: int = 42):
+    """Walk‑forward backtest that *persists* positions and charges costs on position changes.
+    - Build out-of-fold probabilities using TimeSeriesSplit
+    - Convert to desired signals via threshold/deadband
+    - Create *actual* positions that persist (carry last non-neutral)
+    - Apply next-period returns to today's position (no look‑ahead)
+    - Apply costs only when position changes; flipping -1->+1 counts as 2 changes
+    """
     n_splits = max(3, min(8, len(X) // 80))
     tscv = TimeSeriesSplit(n_splits=n_splits)
 
@@ -159,7 +159,7 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, clf_builder, thres
 
     for tr, te in tscv.split(X):
         X_tr, X_te = X.iloc[tr], X.iloc[te]
-        y_tr, y_te = y_ret.iloc[tr], y_ret.iloc[te]
+        y_tr = y_ret.iloc[tr]
 
         clf = clf_builder()
         if calibrate:
@@ -181,34 +181,84 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, clf_builder, thres
     proba_oof = np.concatenate(all_proba)
     idx_oof = np.concatenate([np.array(ix) for ix in all_idx])
     order = np.argsort(idx_oof)
-    proba_oof = proba_oof[order]
-    y_oof = y_ret.loc[idx_oof[order]].values
+    idx_sorted = idx_oof[order]
+    proba_sorted = proba_oof[order]
 
-    # Signals and returns
-    sig = _signals_from_proba(proba_oof, threshold, deadband)  # -1,0,+1
-    # Trading rule: apply position for the next period return
-    strat_ret = sig * y_oof
+    # Desired signals from probability
+    desired = _signals_from_proba(proba_sorted, threshold, deadband)  # -1,0,+1
 
-    # Costs: apply cost once per non-neutral decision
-    cost = (cost_bps / 10000.0)
-    trades = np.count_nonzero(sig)
-    strat_ret_after_cost = strat_ret - cost * (sig != 0)
+    # Regime filter using AdjClose vs MA(regime_ma)
+    ctx = context.loc[pd.Index(idx_sorted)]
+    px = ctx['AdjClose']
+    regime = (px > px.rolling(regime_ma).mean()).astype(int)  # 1 if up regime
 
-    # Metrics
-    cum = np.cumprod(1 + strat_ret_after_cost)
-    cum_return = float(cum[-1] - 1) if len(cum) else float('nan')
-    mu = np.mean(strat_ret_after_cost)
-    sd = np.std(strat_ret_after_cost, ddof=1) if len(strat_ret_after_cost) > 1 else np.nan
+    # If long_only: suppress shorts; else, allow both sides
+    if long_only:
+        desired = np.where(desired > 0, 1, 0)
+    else:
+        # Suppress longs in down regime and suppress shorts in up regime (conservative)
+        desired = np.where((regime == 1) & (desired < 0), 0, desired)  # no shorts in up regime
+        desired = np.where((regime == 0) & (desired > 0), 0, desired)  # no longs in down regime
+
+    # Position persistence
+    pos = np.zeros_like(desired, dtype=float)
+    for i in range(1, len(pos)):
+        if desired[i] == 0:
+            pos[i] = pos[i-1]   # hold last position
+        else:
+            pos[i] = desired[i]
+
+    # Volatility targeting: scale position magnitude by target / realized_vol
+    ret1 = ctx['Ret1'].fillna(0.0)
+    realized_vol = ret1.rolling(20).std().replace(0, np.nan).fillna(method='bfill').fillna(method='ffill')
+    scale = (vol_target / realized_vol).clip(upper=1.0)
+    pos = pos * scale.values
+
+    # Series aligned to index
+    idx = pd.Index(idx_sorted)
+    pos_s = pd.Series(pos, index=idx, dtype=float)
+    y_s   = y_ret.loc[idx]
+
+    # Apply next-period return to *current* position (no look-ahead)
+    pos_shift = pos_s.shift(1).fillna(0.0)
+    strat_ret_gross = pos_shift.values * y_s.values
+
+    # Transaction costs when position changes (per side). Flip counts as 2 * change magnitude.
+    delta_pos = np.abs(pd.Series(pos, index=idx).diff().fillna(pos[0]).values)
+    cost_rate = cost_bps / 10000.0
+    strat_ret_net = strat_ret_gross - cost_rate * delta_pos
+
+    # Metrics on net returns
+    if len(strat_ret_net) == 0:
+        return {
+            'cum_return': float('nan'),
+            'sharpe_annual': float('nan'),
+            'hit_ratio': float('nan'),
+            'max_drawdown': float('nan'),
+            'trades': 0
+        }
+
+    cum = np.cumprod(1 + strat_ret_net)
+    cum_return = float(cum[-1] - 1)
+    mu = np.mean(strat_ret_net)
+    sd = np.std(strat_ret_net, ddof=1) if len(strat_ret_net) > 1 else np.nan
     sharpe_annual = float(np.sqrt(252) * mu / sd) if (sd and sd > 0) else float('nan')
-    hit_ratio = float(np.mean(strat_ret_after_cost > 0)) if len(strat_ret_after_cost) else float('nan')
-    max_dd = _max_drawdown(cum) if len(cum) else float('nan')
+    hit_ratio = float(np.mean(strat_ret_net > 0))
+
+    # Max drawdown
+    peak = np.maximum.accumulate(cum)
+    dd = cum / peak - 1.0
+    max_dd = float(np.min(dd)) if len(dd) else float('nan')
+
+    # Count executed trades as number of nonzero changes (delta_pos>0), flipping counts as 2
+    trades = int(delta_pos.sum())
 
     return {
         'cum_return': cum_return,
         'sharpe_annual': sharpe_annual,
         'hit_ratio': hit_ratio,
         'max_drawdown': max_dd,
-        'trades': int(trades)
+        'trades': trades
     }
 
 
@@ -216,8 +266,9 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, clf_builder, thres
 # Main pipeline
 # -----------------------------
 
-def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold: float = 0.57, deadband: float = 0.05,
-        cost_bps: float = 10.0, clf_model: str = 'histgb', calibrate: bool = False, outdir: str | None = None, plot: bool = False, random_state: int = 42):
+def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold: float = 0.60, deadband: float = 0.10,
+        cost_bps: float = 10.0, clf_model: str = 'histgb', calibrate: bool = True, long_only: bool = True,
+        regime_ma: int = 100, vol_target: float = 0.01, outdir: str | None = None, plot: bool = False, random_state: int = 42):
     end_date = datetime.today().date()
     start_date = end_date - timedelta(days=int(years * 365))
 
@@ -232,6 +283,8 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
     y_ret = _pct_change_safe(data['AdjClose'], horizon).shift(-horizon).dropna()
     # Align features with target
     X = data.loc[y_ret.index, features]
+    # Context for backtest/regime/vol targeting
+    context = data.loc[y_ret.index, ['AdjClose', 'Ret1']].copy()
 
     # Models
     reg_model = RandomForestRegressor(random_state=random_state, n_estimators=400, max_depth=None, n_jobs=-1)
@@ -295,7 +348,10 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
     predicted_price = float(last_close * (1.0 + pred_ret_latest))
 
     # Walk-forward backtest with rule
-    backtest = _backtest_walk_forward(X, y_ret, base_clf, threshold, deadband, cost_bps, calibrate, random_state=random_state)
+    backtest = _backtest_walk_forward(
+        X, y_ret, context, base_clf, threshold, deadband, cost_bps, calibrate, long_only, regime_ma, vol_target,
+        random_state=random_state
+    )
 
     metrics = {
         'reg_mae_cv_mean': float(np.nanmean(maes)),
@@ -325,6 +381,9 @@ def run(ticker: str = "ALO.PA", years: float = 5.0, horizon: int = 5, threshold:
         'clf_model': clf_model,
         'calibrated': calibrate,
         'metrics': metrics,
+        'long_only': long_only,
+        'regime_ma': regime_ma,
+        'vol_target': vol_target,
     }
 
     if outdir:
@@ -365,7 +424,10 @@ if __name__ == "__main__":
     parser.add_argument("--deadband", type=float, default=0.05, help="Neutral zone around 0.5 (default: 0.05)")
     parser.add_argument("--cost_bps", type=float, default=10.0, help="Per-trade cost in bps (default: 10)")
     parser.add_argument("--clf_model", choices=["histgb", "rf"], default="histgb", help="Classifier model")
-    parser.add_argument("--calibrate", action="store_true", help="Calibrate classifier probabilities (isotonic)")
+    parser.add_argument("--calibrate", action="store_true", default=True, help="Calibrate classifier probabilities (isotonic)")
+    parser.add_argument("--long_only", action="store_true", default=True, help="Only take long signals (suppress shorts)")
+    parser.add_argument("--regime_ma", type=int, default=100, help="MA window (days) for regime filter")
+    parser.add_argument("--vol_target", type=float, default=0.01, help="Daily volatility target for position sizing (e.g., 0.01 = 1%)")
     parser.add_argument("--outdir", type=str, default=None, help="Optional output directory for artifacts")
     parser.add_argument("--plot", action="store_true", help="Show plot (off by default)")
 
@@ -379,6 +441,9 @@ if __name__ == "__main__":
         cost_bps=args.cost_bps,
         clf_model=args.clf_model,
         calibrate=args.calibrate,
+        long_only=args.long_only,
+        regime_ma=args.regime_ma,
+        vol_target=args.vol_target,
         outdir=args.outdir,
         plot=args.plot,
     )

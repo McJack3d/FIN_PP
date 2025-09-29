@@ -50,15 +50,18 @@ window = tk.Tk()
 window.title("Alstom Stock Predictor")
 window.geometry("460x360")
 
-# Form variables
+ # Form variables
 var_ticker = StringVar(value="ALO.PA")
 var_years = DoubleVar(value=5.0)
 var_horizon = IntVar(value=5)
-var_threshold = DoubleVar(value=0.57)
-var_deadband = DoubleVar(value=0.05)
+var_threshold = DoubleVar(value=0.60)
+var_deadband = DoubleVar(value=0.10)
 var_costbps = DoubleVar(value=10.0)
 var_model = StringVar(value="histgb")
-var_calibrate = BooleanVar(value=False)
+var_calibrate = BooleanVar(value=True)
+var_longonly = BooleanVar(value=True)
+var_regimema = IntVar(value=100)
+var_voltarget = DoubleVar(value=0.01)
 
 label_var = tk.StringVar(value="Configure parameters then run prediction")
 
@@ -91,13 +94,26 @@ tk.Entry(frm, textvariable=var_threshold, width=8).grid(row=row, column=1, stick
 tk.Label(frm, text="Deadband").grid(row=row, column=2, sticky="w")
 tk.Entry(frm, textvariable=var_deadband, width=8).grid(row=row, column=3, sticky="w")
 
-# Row 4
+ # Row 4
 row += 1
 tk.Label(frm, text="Cost (bps)").grid(row=row, column=0, sticky="w")
 tk.Entry(frm, textvariable=var_costbps, width=8).grid(row=row, column=1, sticky="w")
 
 chk = tk.Checkbutton(frm, text="Calibrate (isotonic)", variable=var_calibrate)
 chk.grid(row=row, column=2, columnspan=2, sticky="w")
+
+# Row 5
+row += 1
+tk.Label(frm, text="Regime MA").grid(row=row, column=0, sticky="w")
+tk.Entry(frm, textvariable=var_regimema, width=8).grid(row=row, column=1, sticky="w")
+
+tk.Label(frm, text="Vol target (daily)").grid(row=row, column=2, sticky="w")
+tk.Entry(frm, textvariable=var_voltarget, width=8).grid(row=row, column=3, sticky="w")
+
+# Row 6
+row += 1
+chk2 = tk.Checkbutton(frm, text="Long only", variable=var_longonly)
+chk2.grid(row=row, column=0, columnspan=2, sticky="w")
 
 # Message label
 row += 1
@@ -137,9 +153,13 @@ def _run_predictor_worker():
             "--deadband", str(var_deadband.get()),
             "--cost_bps", str(var_costbps.get()),
             "--clf_model", var_model.get(),
+            "--regime_ma", str(var_regimema.get()),
+            "--vol_target", str(var_voltarget.get()),
         ]
         if var_calibrate.get():
             args.append("--calibrate")
+        if var_longonly.get():
+            args.append("--long_only")
         result = subprocess.run(args, capture_output=True, text=True, check=True)
         try:
             data = json.loads(result.stdout)
@@ -210,6 +230,8 @@ def _on_prediction_done(out, err):
                 lines.append(f"Backtest max DD : {dd*100:.1f}%")
             if tr is not None:
                 lines.append(f"Backtest trades : {tr}")
+
+        lines.append(f"(long_only={out.get('long_only')}, regime_ma={out.get('regime_ma')}, vol_target={out.get('vol_target')})")
 
         msg = (f"Prédiction au {asof}:\n\n" if asof else "Prédiction:\n\n") + "\n".join(lines)
         messagebox.showinfo("Prediction Result", msg)
