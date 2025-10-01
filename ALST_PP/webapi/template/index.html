@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Prediction Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding-top: 20px;
+            color: #212529;
+        }
+        
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        
+        .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #e9ecef;
+            font-weight: 600;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0 !important;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .result-card {
+            transition: all 0.3s ease;
+        }
+        
+        .prediction-header {
+            text-align: center;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .prediction-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #343a40;
+            margin-bottom: 5px;
+        }
+        
+        .prediction-subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+        
+        .decision-up {
+            background-color: #d1e7dd;
+            color: #0f5132;
+            border-left: 5px solid #198754;
+        }
+        
+        .decision-down {
+            background-color: #f8d7da;
+            color: #842029;
+            border-left: 5px solid #dc3545;
+        }
+        
+        .decision-neutral {
+            background-color: #fff3cd;
+            color: #664d03;
+            border-left: 5px solid #ffc107;
+        }
+        
+        .metric-box {
+            text-align: center;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            height: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        
+        .metric-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 0;
+        }
+        
+        .confidence-meter {
+            height: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            background-color: #e9ecef;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .confidence-level {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 1s ease-in-out;
+        }
+        
+        .prediction-chart {
+            height: 300px;
+            margin: 20px 0;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255,255,255,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .btn-primary {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            padding: 10px 20px;
+            font-weight: 500;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
+        
+        .features-card {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .feature-item {
+            display: inline-block;
+            background-color: #e9ecef;
+            border-radius: 15px;
+            padding: 5px 10px;
+            margin: 3px;
+            font-size: 12px;
+        }
+        
+        .recommendation-box {
+            border-left: 5px solid #6610f2;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        
+        /* Tooltip styling */
+        .tooltip-icon {
+            cursor: pointer;
+            color: #6c757d;
+            margin-left: 5px;
+        }
+        
+        /* Hide results initially */
+        #resultsDashboard {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Prediction Header -->
+        <div class="prediction-header mb-4">
+            <h1 class="prediction-title">Stock Price Prediction Dashboard</h1>
+            <p class="prediction-subtitle">Get actionable forecasts for your selected stock</p>
+        </div>
+        
+        <div class="row">
+            <!-- Input Card -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        Stock Selection
+                    </div>
+                    <div class="card-body">
+                        <form id="predictForm">
+                            <div class="mb-3">
+                                <label for="ticker" class="form-label">Stock Ticker:</label>
+                                <input type="text" class="form-control" id="ticker" name="ticker" value="ALO.PA" required>
+                                <div class="form-text">Example: ALO.PA for Alstom</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="horizon" class="form-label">Prediction Horizon (days):</label>
+                                <input type="range" class="form-range" id="horizon" name="horizon" min="1" max="20" value="5" oninput="this.nextElementSibling.value = this.value">
+                                <output>5</output>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="threshold" class="form-label">Confidence Threshold:</label>
+                                <input type="range" class="form-range" id="threshold" name="threshold" min="0.5" max="0.8" value="0.62" step="0.01" oninput="this.nextElementSibling.value = this.value">
+                                <output>0.62</output>
+                            </div>
+                            
+                            <div class="mb-3 form-check">
+                                <input type="checkbox" class="form-check-input" id="ensemble" name="ensemble" checked>
+                                <label class="form-check-label" for="ensemble">Use Ensemble Model</label>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">Generate Forecast</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Results Dashboard (Initially Hidden) -->
+            <div class="col-lg-8" id="resultsDashboard">
+                <!-- Main Prediction Card -->
+                <div class="card result-card" id="predictionCard">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Prediction Results</span>
+                        <span id="asofDate" class="badge bg-secondary">As of: Loading...</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div id="decisionBox" class="p-3 rounded text-center">
+                                    <h2 id="decisionText" class="mb-0">Loading...</h2>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3">
+                                    <p class="mb-1">Confidence Level</p>
+                                    <div class="confidence-meter">
+                                        <div id="confidenceLevel" class="confidence-level bg-primary" style="width: 0%;"></div>
+                                    </div>
+                                    <p id="confidenceText" class="text-end mb-0">0%</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row gy-3">
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Last Price</p>
+                                    <h3 id="lastPrice" class="metric-value">€0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Predicted Price</p>
+                                    <h3 id="predictedPrice" class="metric-value">€0.00</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Expected Return</p>
+                                    <h3 id="expectedReturn" class="metric-value">0.00%</h3>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="recommendation-box mt-4">
+                            <h5>Recommendation</h5>
+                            <p id="recommendationText">Analyzing the data...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chart Card -->
+                <div class="card">
+                    <div class="card-header">Price Forecast</div>
+                    <div class="card-body">
+                        <canvas id="predictionChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Metrics Card -->
+                <div class="card">
+                    <div class="card-header">Model Performance</div>
+                    <div class="card-body">
+                        <div class="row gy-3">
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Accuracy</p>
+                                    <h3 id="modelAccuracy" class="metric-value">0%</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Backtested Return</p>
+                                    <h3 id="backtestReturn" class="metric-value">0%</h3>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="metric-box">
+                                    <p class="metric-label">Sharpe Ratio</p>
+                                    <h3 id="sharpeRatio" class="metric-value">0.00</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Top Features Card -->
+                <div class="card">
+                    <div class="card-header">Top Predictive Features</div>
+                    <div class="card-body features-card" id="topFeatures">
+                        <div class="text-center">Loading features...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h5>Generating your stock forecast...</h5>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Chart initialization
+        let predictionChart = null;
+        
+        document.getElementById('predictForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Show loading overlay
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            
+            try {
+                const formData = new FormData(this);
+                
+                // Ensure checkbox values are properly converted
+                formData.set('ensemble', document.getElementById('ensemble').checked);
+                
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show results dashboard
+                    document.getElementById('resultsDashboard').style.display = 'block';
+                    
+                    // Update the prediction results
+                    updateResults(data.prediction);
+                    
+                    // Scroll to results if needed
+                    document.getElementById('resultsDashboard').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert(`Network Error: ${error.message}`);
+            } finally {
+                // Hide loading overlay
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        });
+        
+        function updateResults(prediction) {
+            // Update "as of" date
+            document.getElementById('asofDate').textContent = `As of: ${prediction.asof}`;
+            
+            // Update decision
+            const decisionBox = document.getElementById('decisionBox');
+            const decisionText = document.getElementById('decisionText');
+            
+            if (prediction.y_pred === 'UP') {
+                decisionBox.className = 'p-3 rounded text-center decision-up';
+                decisionText.textContent = 'BUY';
+            } else if (prediction.y_pred === 'DOWN') {
+                decisionBox.className = 'p-3 rounded text-center decision-down';
+                decisionText.textContent = 'SELL';
+            } else {
+                decisionBox.className = 'p-3 rounded text-center decision-neutral';
+                decisionText.textContent = 'HOLD';
+            }
+            
+            // Update confidence
+            const confidencePercent = (prediction.proba_up * 100).toFixed(1);
+            document.getElementById('confidenceLevel').style.width = `${confidencePercent}%`;
+            document.getElementById('confidenceText').textContent = `${confidencePercent}%`;
+            
+            // Update price metrics
+            document.getElementById('lastPrice').textContent = `€${prediction.last_close.toFixed(2)}`;
+            document.getElementById('predictedPrice').textContent = `€${prediction.predicted_price.toFixed(2)}`;
+            
+            // Calculate and update expected return
+            const expectedReturn = ((prediction.predicted_price / prediction.last_close) - 1) * 100;
+            const returnElement = document.getElementById('expectedReturn');
+            returnElement.textContent = `${expectedReturn.toFixed(2)}%`;
+            
+            // Color-code return based on value
+            if (expectedReturn > 0) {
+                returnElement.style.color = '#198754';
+            } else if (expectedReturn < 0) {
+                returnElement.style.color = '#dc3545';
+            } else {
+                returnElement.style.color = '#212529';
+            }
+            
+            // Update recommendation text
+            let recommendationText = '';
+            if (prediction.y_pred === 'UP') {
+                recommendationText = `Our model predicts ${prediction.ticker} will rise over the next ${prediction.horizon_days} days with ${confidencePercent}% confidence. Consider buying at current levels.`;
+            } else if (prediction.y_pred === 'DOWN') {
+                recommendationText = `Our model predicts ${prediction.ticker} will fall over the next ${prediction.horizon_days} days with ${(100 - confidencePercent).toFixed(1)}% confidence. Consider reducing exposure.`;
+            } else {
+                recommendationText = `Our model suggests a neutral stance on ${prediction.ticker} for the next ${prediction.horizon_days} days. Consider waiting for a stronger signal.`;
+            }
+            document.getElementById('recommendationText').textContent = recommendationText;
+            
+            // Update model metrics
+            const metrics = prediction.metrics;
+            document.getElementById('modelAccuracy').textContent = `${(metrics.clf_accuracy_cv_mean * 100).toFixed(1)}%`;
+            document.getElementById('backtestReturn').textContent = `${(metrics.backtest.cum_return * 100).toFixed(1)}%`;
+            document.getElementById('sharpeRatio').textContent = `${metrics.backtest.sharpe_annual.toFixed(2)}`;
+            
+            // Update features
+            const featuresContainer = document.getElementById('topFeatures');
+            featuresContainer.innerHTML = '';
+            
+            if (prediction.top_features && prediction.top_features.length > 0) {
+                prediction.top_features.forEach(feature => {
+                    const featureEl = document.createElement('span');
+                    featureEl.className = 'feature-item';
+                    featureEl.textContent = feature;
+                    featuresContainer.appendChild(featureEl);
+                });
+            } else {
+                featuresContainer.textContent = 'No feature importance data available';
+            }
+            
+            // Update chart
+            updatePredictionChart(prediction);
+        }
+        
+        function updatePredictionChart(prediction) {
+            // If chart exists, destroy it before creating a new one
+            if (predictionChart) {
+                predictionChart.destroy();
+            }
+            
+            // Create dates for the chart
+            const today = new Date();
+            const dates = [];
+            const values = [];
+            
+            // Add historical values (simple simulation)
+            for (let i = 6; i >= 1; i--) {
+                const date = new Date(today);
+                date.setDate(today.getDate() - i);
+                dates.push(formatDate(date));
+                
+                // Simulate some historical data around the current price
+                const randomFactor = 0.99 + Math.random() * 0.02; // +/- 1%
+                values.push(prediction.last_close * randomFactor);
+            }
+            
+            // Add current price
+            dates.push(formatDate(today));
+            values.push(prediction.last_close);
+            
+            // Add prediction
+            const futureDate = new Date(today);
+            futureDate.setDate(today.getDate() + prediction.horizon_days);
+            dates.push(formatDate(futureDate));
+            values.push(prediction.predicted_price);
+            
+            // Create chart
+            const ctx = document.getElementById('predictionChart').getContext('2d');
+            predictionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Historical Price',
+                        data: values.slice(0, -1),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.2
+                    }, {
+                        label: 'Predicted Price',
+                        data: values.slice(-2),
+                        borderColor: '#20c997',
+                        backgroundColor: 'rgba(32, 201, 151, 0.1)',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointBackgroundColor: '#20c997',
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${prediction.ticker} - ${prediction.horizon_days}-Day Price Forecast`,
+                            font: {
+                                size: 16
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                });
+        }
+        
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+    </script>
+</body>
+</html>

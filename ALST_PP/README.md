@@ -1,35 +1,47 @@
-# ALST_Ticker_PP
+# Stock Price Prediction Application
 
-Predict the future price of Alstom stock.
+A modular application for predicting stock prices using machine learning techniques.
 
-## ✅ Project Scope: Alstom Stock Price Predictor
+## Directory Structure
 
-## 🎯 Objectives
-	1.	Regression: Predict the next day’s closing price of Alstom stock.
-	2.	Classification: Predict whether the next day’s price will go up or down.
+- `models/`: Core prediction models and algorithms
+- `interfaces/`: User interfaces (CLI, GUI, etc.)
+- `run.sh`: Universal launcher script for macOS/Linux
+- `cli.py`: Command-line interface entry point
+- `gui.py`: Web GUI interface entry point
 
-## 📅 Time Horizon
-	•	Predict 1-day ahead based on recent historical data (e.g. past 5, 10, or 30 days).
+## Getting Started
 
-## 📊 Input Features (examples)
-	•	Historical Open, High, Low, Close, Volume (OHLCV).
-	•	Technical indicators (you can add more later):
-	•	Moving averages (MA10, MA30),
-	•	RSI (Relative Strength Index),
-	•	Momentum,
-	•	Price returns.
+### Installation
 
-## 🧠 Models to Try
-	•	Regression: Linear Regression, Decision Tree Regressor, XGBoost, LSTM.
-	•	Classification: Logistic Regression, Random Forest, SVM, or LSTM with classification head.
+1. Make sure you have Python 3.7+ installed
+2. Install dependencies:
+   ```bash
+   pip install pandas numpy scikit-learn yfinance fastapi uvicorn matplotlib
+   ```
 
-## 🧪 Evaluation Metrics
-	•	Regression: RMSE (Root Mean Squared Error), MAE.
-	•	Classification: Accuracy, Precision, Recall, Confusion Matrix.
+### Running the Application
 
-## 🧰 Tools & Stack
-	•	Language: Python
-	•	Data source: yfinance (Alstom ticker: "ALO.PA")
-	•	Libraries: pandas, numpy, scikit-learn, matplotlib, seaborn, yfinance
+#### Command Line Interface
 
-# Project aborted, uneficient precision and knowledge yet for an accurate model
+```bash
+# Basic usage
+python cli.py --ticker ALO.PA --horizon 5
+
+# With more options
+python cli.py --ticker MSFT --horizon 10 --threshold 0.65 --model ensemble --plot
+```
+
+#### Web Interface
+
+```bash
+# Start the web server
+python gui.py
+```
+Then open your browser to http://127.0.0.1:8000
+
+Alternatively, use the shell script (on macOS/Linux):
+```bash
+chmod +x run.sh
+./run.sh
+```
