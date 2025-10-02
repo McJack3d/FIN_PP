@@ -285,13 +285,7 @@ def _adaptive_threshold(vol: float, base_threshold: float, vol_scaling: bool = T
 def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFrame, clf_builder, threshold: float, deadband: float,
                            cost_bps: float, calibrate: bool, long_only: bool, regime_ma: int, vol_target: float,
                            horizon: int, random_state: int = 42):
-    """Walk‑forward backtest that *persists* positions and charges costs on position changes.
-    - Build out-of-fold probabilities using TimeSeriesSplit
-    - Convert to desired signals via threshold/deadband
-    - Create *actual* positions that persist (carry last non-neutral)
-    - Apply next-period returns to today's position (no look‑ahead)
-    - Apply costs only when position changes; flipping -1->+1 counts as 2 changes
-    """
+    """Walk‑forward backtest that *persists* positions and charges costs on position changes."""
     n_splits = max(3, min(8, len(X) // 80))
     tscv = TimeSeriesSplit(n_splits=n_splits, gap=5)
 
@@ -304,13 +298,18 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
 
         # Feature selection to focus on most predictive features
         if len(X_tr) > 100:  # Ensure enough data for feature selection
-            base_clf = HistGradientBoostingClassifier(random_state=random_state)
-            selector = SelectFromModel(estimator=base_clf, threshold='mean')
-            selector.fit(X_tr, (y_tr > 0).astype(int))
-            selected_features = X_tr.columns[selector.get_support()]
-            if len(selected_features) >= 10:  # Ensure we have enough features
-                X_tr = X_tr[selected_features]
-                X_te = X_te[selected_features]
+            # FIX: Use RandomForest for feature selection as it's more reliable
+            rf_selector = RandomForestClassifier(n_estimators=50, random_state=random_state)
+            rf_selector.fit(X_tr, (y_tr > 0).astype(int))
+            
+            # Get feature importances and select top features
+            importances = rf_selector.feature_importances_
+            n_features = min(len(X_tr.columns), max(10, len(X_tr.columns) // 2))
+            top_indices = np.argsort(importances)[-n_features:]
+            selected_features = X_tr.columns[top_indices]
+            
+            X_tr = X_tr[selected_features]
+            X_te = X_te[selected_features]
 
         clf = clf_builder()
         if calibrate:
@@ -326,9 +325,11 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
             'sharpe_annual': float('nan'),
             'hit_ratio': float('nan'),
             'max_drawdown': float('nan'),
-            'trades': 0
+            'trades': 0,
+            'buyhold_cum_return': float('nan')
         }
 
+    # Combine out-of-fold predictions
     proba_oof = np.concatenate(all_proba)
     idx_oof = np.concatenate([np.array(ix) for ix in all_idx])
     order = np.argsort(idx_oof)
@@ -370,9 +371,9 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
     if long_only:
         desired = np.where(desired > 0, 1, 0)
     else:
-        # Suppress longs in down regime and suppress shorts in up regime (conservative)
-        desired = np.where((regime == 1) & (desired < 0), 0, desired)  # no shorts in up regime
-        desired = np.where((regime == 0) & (desired > 0), 0, desired)  # no longs in down regime
+        # Suppress longs in down regime and shorts in up regime
+        desired = np.where((regime == 1) & (desired < 0), 0, desired)
+        desired = np.where((regime == 0) & (desired > 0), 0, desired)
 
     # Discrete SIDE in {-1,0,+1} that we will scale later
     side = np.zeros_like(desired, dtype=float)
@@ -410,7 +411,8 @@ def _backtest_walk_forward(X: pd.DataFrame, y_ret: pd.Series, context: pd.DataFr
             'sharpe_annual': float('nan'),
             'hit_ratio': float('nan'),
             'max_drawdown': float('nan'),
-            'trades': 0
+            'trades': 0,
+            'buyhold_cum_return': bh_cum_return
         }
 
     cum = np.cumprod(1 + strat_ret_net)
