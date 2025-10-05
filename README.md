@@ -1,2 +1,1 @@
-Projet s'inscrivant dans une démarche plus technique de conception de prédicteur de prix d'une equity. 
-Actuellment en pause le temps de prendre de l'exp.
+A stock price prediction system combining fundamental and technical analysis, as well as sentiment analysis. This project is currently under development and has been temporarily paused for an experience accumulation period.
