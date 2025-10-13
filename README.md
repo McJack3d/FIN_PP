@@ -1,2 +1,1 @@
-Projet s'inscrivant dans une démarche plus technique de conception de prédicteur de prix d'une equity. 
-Actuellment en pause le temps de prendre de l'exp.
+Ce projet est axé sur la mise en œuvre d'un système predicteur de prix pour les actions (equities). Il s'appuie sur une approche technique innovante et rigoureuse de conception. Actuellement, le développement a été mis en pause afin de permettre un gain d'expérience et d'une meilleure compréhension du sujet.
