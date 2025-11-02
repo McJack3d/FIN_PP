@@ -1,0 +1,93 @@
+project:
+  name: THES_SA
+  description: "Sentiment-Driven Short-Term Forecasting in the Energy Equity Market"
+
+paths:
+  root: /Users/alexandrebredillot/Documents/GitHub/FIN_PP/THES_SA
+  data_dir: data
+  raw: data/raw
+  processed: data/processed
+  news: data/news
+  tweets: data/tweets
+  models: models
+  results: results
+  cache: cache
+  notebooks: notebooks
+
+tickers:
+  - XOM
+  - CVX
+  - COP
+  - OXY
+  - SLB
+  - HAL
+  - EOG
+  - PSX
+  - KMI
+  - PXD
+  - MRO
+  - HES
+
+dates:
+  # If start_date / end_date are null, code should compute them from months_back
+  start_date: null         # use YYYY-MM-DD or null
+  end_date: null           # use YYYY-MM-DD or null
+  months_back: 6           # default lookback when start_date is null (3-6 recommended for pilot)
+
+newsapi:
+  use_env: true            # if true, read api_key from env NEWSAPI_KEY
+  api_key: "372adf95863c40a9a9e2f43d65cf84cd"   # keep blank if using env
+  url: https://newsapi.org/v2/everything
+  page_size: 100
+  free_plan_days: 30
+  max_retries: 3
+  retry_backoff_sec: 1
+
+gdelt:
+  url: https://api.gdeltproject.org/api/v2/doc/doc  # adjust per your usage (ArtList endpoints vary)
+  chunk_days: 5
+  timeout_sec: 30
+  max_retries: 3
+
+twitter:
+  use_snscrape: true
+  query_template: '{keywords} since:{start} until:{end}'  # format used by snscrape if needed
+  max_tweets: 1000
+
+fetch:
+  parallel_workers: 4
+  sleep_between_requests_sec: 1.5
+  cache_ttl_seconds: 86400
+
+thresholds:
+  sentiment_positive: 0.05
+  sentiment_negative: -0.05
+  min_articles_per_day: 1
+  volatility_high: 0.03   # daily volatility threshold
+
+model:
+  target_column: daily_change
+  forecast_horizon_days: 1
+  test_size: 0.2
+  random_state: 42
+  default_model: rf
+
+cache:
+  enabled: true
+  dir: cache
+  ttl_seconds: 86400
+
+logging:
+  level: INFO
+  logfile: fetch.log
+
+environment:
+  # Prefer storing secrets in environment variables. Example names used by code:
+  NEWSAPI_ENV_VAR: NEWSAPI_KEY
+  GDELT_API_KEY_ENV_VAR: GDELT_KEY     # if applicable
+  TWITTER_BEARER_ENV_VAR: TWITTER_BEARER_TOKEN
+
+notes:
+  - "Replace API key placeholders or set the indicated environment variables."
+  - "If start_date/end_date are null, code should compute start_date = end_date - months_back months."
+  - "Adjust chunk_days and timeouts for GDELT based on observed API behaviour."
