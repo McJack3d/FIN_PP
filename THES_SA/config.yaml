@@ -15,24 +15,51 @@ paths:
   notebooks: notebooks
 
 tickers:
-  - XOM
-  - CVX
-  - COP
-  - OXY
-  - SLB
-  - HAL
-  - EOG
-  - PSX
-  - KMI
-  - PXD
-  - MRO
-  - HES
+  core_set:
+    - SMR    # NuScale Power (SMR nuclear)
+    - LEU    # Centrus Energy (nuclear fuel)
+    - NNE    # Nano Nuclear Energy
+  benchmark_set:
+    - XOM    # Exxon Mobil
+    - CVX    # Chevron
+    - NEE    # NextEra Energy
+    - DUK    # Duke Energy
+    - SO     # Southern Company
+    - D      # Dominion Energy
+  all_tickers:
+    - SMR
+    - LEU
+    - NNE
+    - XOM
+    - CVX
+    - NEE
+    - DUK
+    - SO
+    - D
 
 dates:
   # If start_date / end_date are null, code should compute them from months_back
   start_date: null         # use YYYY-MM-DD or null
   end_date: null           # use YYYY-MM-DD or null
   months_back: 6           # default lookback when start_date is null (3-6 recommended for pilot)
+
+yfinance:
+  intervals:
+    daily: "1d"
+    intraday: "1h"
+  period: "1y"             # fallback if dates not specified
+  auto_adjust: true
+  prepost: false
+  threads: true
+  proxy: null
+
+huggingface:
+  dataset: "oliverwang/FNSPID"
+  cache_dir: "data/hf_cache"
+  use_auth_token: false    # set to true if private dataset
+  max_articles: 10000
+  text_column: "headline"
+  date_column: "date"
 
 newsapi:
   use_env: true            # if true, read api_key from env NEWSAPI_KEY

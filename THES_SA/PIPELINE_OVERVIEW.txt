@@ -1,0 +1,212 @@
+"""
+                    DATA ENGINEERING PIPELINE - VISUAL OVERVIEW
+                    =========================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         PHASE 1: DATA COLLECTION                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │   QUANTITATIVE STREAM       │         │    TEXTUAL STREAM          │
+  │   (quantitative_collector)  │         │    (textual_collector)     │
+  └─────────────────────────────┘         └─────────────────────────────┘
+              │                                       │
+              │                                       │
+  ┌───────────▼──────────┐                ┌──────────▼──────────┐
+  │  yfinance API        │                │  FNSPID Dataset     │
+  │  • Daily OHLCV       │                │  (Hugging Face)     │
+  │  • Intraday (1h)     │                │  • Financial News   │
+  │                      │                │  • Headlines        │
+  │  Core Set:           │                └─────────────────────┘
+  │  • SMR, LEU, NNE     │                           │
+  │                      │                ┌──────────▼──────────┐
+  │  Benchmark:          │                │  Web Scraping       │
+  │  • XOM, CVX, NEE     │                │  (Yahoo Finance)    │
+  │  • DUK, SO, D        │                │  • Recent News      │
+  └──────────────────────┘                └─────────────────────┘
+              │                                       │
+              │                                       │
+              ▼                                       ▼
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │  RAW DATA                   │         │  RAW NEWS                   │
+  │  data/raw/                  │         │  data/news/                 │
+  │  • daily_ohlcv.csv          │         │  • fnspid_news.csv          │
+  │  • intraday_1h_ohlcv.csv    │         │  • scraped_news.csv         │
+  │                             │         │  • all_news_combined.csv    │
+  └─────────────────────────────┘         └─────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      PHASE 2: DATA PREPROCESSING                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │  FINANCIAL PREPROCESSOR     │         │  TEXTUAL PREPROCESSOR       │
+  │  (preprocessing.py)         │         │  (preprocessing.py)         │
+  └─────────────────────────────┘         └─────────────────────────────┘
+              │                                       │
+              │                                       │
+    ┌─────────▼─────────┐                 ┌──────────▼──────────┐
+    │  Data Cleaning    │                 │  Text Cleaning      │
+    │  • Missing values │                 │  • URLs removal     │
+    │  • Outliers       │                 │  • Normalization    │
+    │  • Validation     │                 │  • Deduplication    │
+    └───────────────────┘                 └─────────────────────┘
+              │                                       │
+    ┌─────────▼─────────┐                 ┌──────────▼──────────┐
+    │  Feature Eng.     │                 │  Tokenization       │
+    │  • RSI            │                 │  • FinBERT          │
+    │  • MACD           │                 │  • Stop-words kept  │
+    │  • MA (5,10,20)   │                 │  • Max 512 tokens   │
+    │  • Volatility     │                 │  • Padding          │
+    │  • Bollinger      │                 └─────────────────────┘
+    └───────────────────┘                            │
+              │                          ┌──────────▼──────────┐
+    ┌─────────▼─────────┐                │  Relevance Filter   │
+    │  Min-Max Scale    │                │  • Ticker match     │
+    │  • Range: [0,1]   │                │  • Keyword filter   │
+    │  • Per ticker     │                │  • Source verify    │
+    │  • Save scalers   │                └─────────────────────┘
+    └───────────────────┘                            │
+              │                                       │
+              ▼                                       ▼
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │  PROCESSED DATA             │         │  PROCESSED NEWS             │
+  │  data/processed/            │         │  data/processed/            │
+  │  • daily_ohlcv_processed    │         │  • news_processed.csv       │
+  │  • intraday_processed       │         │  • token_count stats        │
+  │  • scalers.pkl              │         │  • cleaned_text             │
+  └─────────────────────────────┘         └─────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    DATA OUTPUT & SYNCHRONIZATION                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+              ┌─────────────────────────────────┐
+              │     SYNCHRONIZED DATASET        │
+              │  (Ready for Model Training)     │
+              │                                 │
+              │  Features:                      │
+              │  • 20+ Technical Indicators     │
+              │  • Normalized Prices [0,1]      │
+              │  • FinBERT Tokens               │
+              │  • Date Alignment               │
+              │  • Ticker Mapping               │
+              └─────────────────────────────────┘
+                           │
+           ┌───────────────┼───────────────┐
+           │               │               │
+           ▼               ▼               ▼
+    ┌──────────┐   ┌──────────┐   ┌──────────┐
+    │ Phase 3  │   │ Phase 4  │   │ Phase 5  │
+    │Sentiment │   │  Model   │   │Backtest  │
+    │Analysis  │   │  Train   │   │Evaluate  │
+    └──────────┘   └──────────┘   └──────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         PIPELINE EXECUTION                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Command Line Options:
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │ ./run_pipeline.sh                  # Automated (recommended)        │
+  │                                                                      │
+  │ python pipeline.py --mode full     # Complete pipeline              │
+  │ python pipeline.py --mode collect  # Collection only                │
+  │ python pipeline.py --mode preprocess # Preprocessing only           │
+  │                                                                      │
+  │ python pipeline.py --no-intraday   # Skip intraday data             │
+  │ python pipeline.py --use-newsapi   # Enable NewsAPI                 │
+  │ python pipeline.py --no-scraping   # Disable web scraping           │
+  └─────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        KEY FEATURES & BENEFITS                          │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ✅ QUANTITATIVE PROCESSING           ✅ TEXTUAL PROCESSING
+     • Min-Max normalization               • FinBERT tokenization
+     • 20+ technical indicators            • Stop-word preservation
+     • Multi-timeframe support             • Multi-source aggregation
+     • Outlier detection                   • Relevance filtering
+     • Scaler persistence                  • Deduplication
+
+  ✅ DATA QUALITY                      ✅ USABILITY
+     • Missing value handling              • Single command execution
+     • Validation checks                   • Comprehensive logging
+     • Error recovery                      • Multiple modes
+     • Comprehensive logging               • Well documented
+
+  ✅ PERFORMANCE                       ✅ EXTENSIBILITY
+     • Parallel processing                 • Modular design
+     • Local caching                       • Easy configuration
+     • Rate limiting                       • Plugin architecture
+     • Memory efficient                    • Custom processors
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          TICKER COVERAGE                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  CORE SET (Nuclear Energy)          BENCHMARK SET (Traditional)
+  ═══════════════════════            ═══════════════════════════
+  
+  SMR  - NuScale Power               XOM  - Exxon Mobil
+         Small Modular Reactors            Oil & Gas Major
+  
+  LEU  - Centrus Energy              CVX  - Chevron
+         Nuclear Fuel                      Oil & Gas Major
+  
+  NNE  - Nano Nuclear Energy         NEE  - NextEra Energy
+         Next-Gen Nuclear                  Clean Energy Leader
+  
+                                     DUK  - Duke Energy
+                                            Major Utility
+  
+                                     SO   - Southern Company
+                                            Major Utility
+  
+                                     D    - Dominion Energy
+                                            Major Utility
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           OUTPUT STRUCTURE                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  THES_SA/
+  ├── 📋 config.yaml                  # Configuration
+  ├── 📋 requirements.txt             # Dependencies
+  ├── 🚀 run_pipeline.sh              # Quick start
+  ├── 📖 README_NEW.md                # Documentation
+  ├── 📊 IMPLEMENTATION_SUMMARY.md    # This summary
+  │
+  ├── data/
+  │   ├── 🐍 pipeline.py              # Main orchestrator
+  │   ├── 🐍 quantitative_collector.py
+  │   ├── 🐍 textual_collector.py
+  │   ├── 🐍 preprocessing.py
+  │   ├── 🐍 generate_summary.py
+  │   │
+  │   ├── raw/                        # Raw data
+  │   ├── processed/                  # Processed data
+  │   ├── news/                       # News articles
+  │   └── hf_cache/                   # HF cache
+  │
+  ├── notebooks/                      # Jupyter notebooks
+  ├── models/                         # Trained models
+  └── results/                        # Analysis results
+
+
+═══════════════════════════════════════════════════════════════════════════
+
+                    🎉 DATA ENGINEERING PHASE COMPLETE 🎉
+
+    Next Steps: Phase 2 - Sentiment Analysis with FinBERT
+
+═══════════════════════════════════════════════════════════════════════════
+"""
