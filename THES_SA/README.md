@@ -1,271 +1,121 @@
-# 🧠 THES_SA: Sentiment-Driven Forecasting in Nuclear Energy Equities
+# THES_SA: Sentiment-Driven Nuclear Equity Forecasting (v2.0)
 
-**Sentiment-Driven Short-Term Forecasting in the Energy Equity Market**
+**Sentiment Analysis and Short-Term Return Predictability in Small-Cap Nuclear & Energy-Transition Equities: A FinBERT-LSTM Approach**
 
-This project implements a comprehensive data engineering and machine learning pipeline for financial forecasting, combining quantitative time-series analysis with sentiment analysis from financial news. The focus is on nuclear energy equities (SMR, LEU, NNE) compared against traditional energy benchmarks.
+MSc Thesis - EDHEC Business School, Data Analytics & AI
 
 ---
 
-## 🚀 Quick Start
-
-### Option 1: Automated Setup (Recommended)
+## Quick Start
 
 ```bash
-cd /Users/alexandrebredillot/Documents/GitHub/FIN_PP/THES_SA
+cd /path/to/THES_SA
+
+# Automated (recommended)
 ./run_pipeline.sh
-```
 
-### Option 2: Manual Setup
-
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Run data engineering pipeline
-cd data
-python pipeline.py --mode full
+# Or run individual phases
+python run_all.py --phase 0    # Feasibility audit only
+python run_all.py --phase 1    # Data collection only
+python run_all.py --phase 2    # Sentiment scoring only
+python run_all.py --phase 3    # LSTM modeling only
+python run_all.py --start-from 2  # Resume from Phase 2
 ```
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 THES_SA/
-├── config.yaml                   # Configuration file
-├── requirements.txt              # Python dependencies
-├── run_pipeline.sh              # Quick start script
-├── README.md                    # This file
+├── config.yaml                    # Central configuration
+├── requirements.txt               # Python dependencies
+├── run_pipeline.sh               # Shell launcher
+├── run_all.py                    # Master orchestrator
 │
-├── data/                        # Data engineering modules
-│   ├── pipeline.py             # Main orchestrator
-│   ├── quantitative_collector.py  # yfinance data collection
-│   ├── textual_collector.py       # FNSPID + web scraping
-│   ├── preprocessing.py           # Scaling & tokenization
-│   ├── README.md               # Detailed documentation
-│   │
-│   ├── raw/                    # Raw collected data
-│   ├── processed/              # Preprocessed data
-│   ├── news/                   # News articles
-│   └── hf_cache/              # Hugging Face cache
+├── data/                         # Phase 0 + 1
+│   ├── feasibility_audit.py     # Phase 0: FNSPID coverage audit
+│   ├── pipeline.py              # Phase 1: Data collection orchestrator
+│   ├── quantitative_collector.py # Daily OHLCV via yfinance
+│   ├── textual_collector.py     # FNSPID + Yahoo Finance scraping
+│   ├── preprocessing.py         # Feature engineering + normalization
+│   ├── generate_summary.py      # Summary statistics & plots
+│   ├── raw/                     # Raw collected data
+│   ├── processed/               # Preprocessed data
+│   └── news/                    # News articles
 │
-├── notebooks/                   # Jupyter notebooks
-│   └── 01_data_engineering_pipeline.md
+├── sentiment/                    # Phase 2
+│   ├── scorer.py                # FinBERT sentiment scoring
+│   └── features.py              # Daily Sentiment Index + Momentum
 │
-├── models/                      # Trained models (future)
-└── results/                     # Analysis results (future)
+├── models/                       # Phase 3
+│   ├── lstm_model.py            # Baseline + Augmented LSTM
+│   ├── evaluation.py            # MAE, DA, Diebold-Mariano, H1/H2
+│   └── explainability.py        # SHAP analysis
+│
+├── results/                      # All outputs
+└── notebooks/                    # Exploration notebooks
 ```
 
 ---
 
-## 🎯 Core Components
+## Ticker Universe
 
-### Core Set (Nuclear Energy)
-- **SMR** (NuScale Power) - Small Modular Reactor technology
-- **LEU** (Centrus Energy) - Nuclear fuel enrichment
-- **NNE** (Nano Nuclear Energy) - Next-generation nuclear energy
-
-### Benchmark Set (Traditional Energy)
-- XOM, CVX (Oil & Gas)
-- NEE, DUK, SO, D (Utilities/Clean Energy)
+| Group | Tickers | Characteristics |
+|-------|---------|-----------------|
+| **Core Set (Small-Cap)** | SMR, LEU, LTBR, NXE, NNE, LAC | Market cap <$2B, high volatility, retail-driven |
+| **Benchmark Set (Large-Cap)** | CCJ, CEG, BWXT | Market cap >$10B, institutional following |
 
 ---
 
-## 🔧 Data Engineering Pipeline
+## Pipeline Phases
 
-### Phase 1: Data Collection
+### Phase 0: Feasibility Audit
+Checks FNSPID news coverage per ticker. Tickers with <50 articles are flagged.
 
-#### Quantitative Stream (yfinance)
-- ✅ Daily OHLCV data for all tickers
-- ✅ Intraday (1-hour) data for high-frequency analysis
-- ✅ Historical data with configurable lookback period
+### Phase 1: Data Collection + Preprocessing
+- **Quantitative**: Daily OHLCV via yfinance (12-month lookback)
+- **Technical features**: RSI, MA(10,50), MACD, Realized Volatility
+- **Target variables**: 1-day and 5-day forward log returns
+- **Textual**: FNSPID dataset + Yahoo Finance scraping
+- **Normalization**: Min-Max scaling per ticker
 
-#### Textual Stream
-- ✅ **FNSPID Dataset**: Professional financial news from Hugging Face
-- ✅ **Web Scraping**: Recent news from Yahoo Finance
-- ✅ **NewsAPI** (optional): Additional news sources
+### Phase 2: Sentiment Analysis
+- **FinBERT scoring**: Each headline scored (positive, negative, neutral)
+- **Daily Sentiment Index**: Volume-weighted average per ticker per day
+- **Sentiment Momentum**: 3-day rolling change in sentiment
 
-### Phase 2: Data Preprocessing
-
-#### Financial Data Processing
-- Min-Max normalization (0-1 range for neural network stability)
-- Technical indicators: MA, RSI, MACD, Bollinger Bands, Volatility
-- Missing value handling and outlier detection
-
-#### Textual Data Processing
-- Text cleaning and normalization
-- Tokenization for FinBERT
-- **Stop-word preservation** (crucial for financial context)
-- Deduplication and relevance filtering
-
----
-
-## 📊 Usage Examples
-
-```bash
-# Run full pipeline
-python data/pipeline.py --mode full
-
-# Data collection only
-python data/pipeline.py --mode collect --no-intraday
-
-# Preprocessing only
-python data/pipeline.py --mode preprocess
-
-# With NewsAPI
-python data/pipeline.py --mode full --use-newsapi
-```
+### Phase 3: LSTM Modeling + Evaluation
+- **Baseline LSTM**: Price/technical features only
+- **Sentiment-Augmented LSTM**: Price + sentiment features
+- **Evaluation**: MAE, Directional Accuracy, Diebold-Mariano test
+- **Hypothesis Testing**:
+  - H1: Sentiment improves prediction for small-cap nuclear stocks
+  - H2: Improvement is larger for small-caps than large-caps (Sentiment Premium)
+- **SHAP**: Feature importance analysis on augmented model
 
 ---
 
-## 🧩 Methods & Tools
+## Hypotheses
 
-### Data Engineering
-- **Quantitative**: yfinance, pandas, numpy
-- **Textual**: Hugging Face datasets, BeautifulSoup, requests
-- **Preprocessing**: scikit-learn (MinMaxScaler), transformers (FinBERT tokenizer)
+**H1**: An LSTM augmented with FinBERT sentiment achieves lower MAE and higher directional accuracy than a price-only baseline, for small-cap nuclear equities.
 
-### NLP & Sentiment Analysis
-- **FinBERT**: Financial sentiment analysis
-- **VADER, TextBlob**: Alternative sentiment methods
-- **Transformers**: BERT-based models for context understanding
-
-### ML Models (Planned)
-- LSTM for time-series forecasting
-- Random Forest, XGBoost for feature importance
-- Transformer architectures for multi-modal learning
-
-### Explainability (Planned)
-- SHAP values for feature importance
-- LIME for local interpretability
-- Attention visualization for Transformers
+**H2 (Small-Cap Sentiment Premium)**: The predictive improvement from adding sentiment is significantly larger for small-cap nuclear stocks (Core Set) than for large-cap energy benchmarks (Benchmark Set).
 
 ---
 
-## 📈 Output Data
-
-### Processed Financial Data
-- `daily_ohlcv_processed.csv`: Daily data with 20+ technical indicators
-- `intraday_1h_ohlcv_processed.csv`: Hourly data
-- `scalers.pkl`: Fitted Min-Max scalers for consistent normalization
-
-### Processed Textual Data
-- `news_processed.csv`: Cleaned and tokenized news (FinBERT-ready)
-- `fnspid_news.csv`: FNSPID dataset articles
-- `scraped_news.csv`: Recent scraped articles
-
----
-
-## 📊 Expected Outcomes
-
-- Quantitative insights on sentiment-price relationships in nuclear energy stocks
-- Comparative analysis: news sentiment vs. price movements
-- Transparent and interpretable forecasting framework
-- Feature importance analysis across multiple data streams
-
----
-
-## ⚙️ Configuration
-
-Edit `config.yaml` to customize:
-
-```yaml
-tickers:
-  core_set: [SMR, LEU, NNE]
-  benchmark_set: [XOM, CVX, NEE, DUK, SO, D]
-
-dates:
-  months_back: 6
-
-yfinance:
-  intervals:
-    daily: "1d"
-    intraday: "1h"
-
-huggingface:
-  dataset: "oliverwang/FNSPID"
-```
-
----
-
-## 🔮 Roadmap
-
-- [x] **Data Engineering Pipeline (Phase 1)**
-  - [x] Quantitative data collection (yfinance)
-  - [x] Textual data collection (FNSPID + scraping)
-  - [x] Min-Max scaling and normalization
-  - [x] FinBERT tokenization
-- [ ] **Sentiment Analysis (Phase 2)**
-  - [ ] FinBERT sentiment scoring
-  - [ ] Sentiment-price alignment
-  - [ ] Multi-source sentiment aggregation
-- [ ] **Model Development (Phase 3)**
-  - [ ] LSTM forecasting models
-  - [ ] Multi-modal learning (price + sentiment)
-  - [ ] Hyperparameter optimization
-- [ ] **Explainability (Phase 4)**
-  - [ ] SHAP values
-  - [ ] Feature importance analysis
-  - [ ] Attention visualization
-- [ ] **Backtesting & Evaluation (Phase 5)**
-  - [ ] Trading strategy simulation
-  - [ ] Performance metrics
-  - [ ] Risk-adjusted returns
-
----
-
-## 🛠️ Requirements
+## Requirements
 
 - Python 3.8+
-- yfinance
-- transformers (Hugging Face)
-- pandas, numpy, scikit-learn
-- beautifulsoup4, requests
-- PyTorch (for FinBERT)
-
-See [requirements.txt](requirements.txt) for full list.
+- TensorFlow >= 2.14 (LSTM models)
+- PyTorch + Transformers (FinBERT)
+- See `requirements.txt` for full list
 
 ---
 
-## 📚 Documentation
+## Author
 
-- [Data Engineering Details](data/README.md)
-- [Example Notebook](notebooks/01_data_engineering_pipeline.md)
-- [Configuration Guide](config.yaml)
+**Alexandre Bredillot**
+EDHEC Business School - MSc Data Analytics & AI
 
----
-
-## 🐛 Troubleshooting
-
-### FNSPID Dataset Issues
-```bash
-pip install --upgrade datasets transformers
-```
-
-### Memory Constraints
-```bash
-python data/pipeline.py --no-intraday
-```
-
-### Rate Limiting
-Built-in delays handle API rate limits automatically
-
----
-
-## 👤 Author
-
-**Alexandre Bredillot**  
-EDHEC Business School  
-Financial Engineering & Data Science
-
----
-
-## 🙏 Acknowledgments
-
-- **FNSPID Dataset**: oliverwang/FNSPID (Hugging Face)
-- **FinBERT**: ProsusAI/finbert
-- **yfinance**: Yahoo Finance API wrapper
-
----
-
-*Last Updated: January 2026*
+*Updated: March 2026 (v2.0)*

@@ -1,9 +1,28 @@
 """
-                    DATA ENGINEERING PIPELINE - VISUAL OVERVIEW
-                    =========================================
+                    THES_SA PIPELINE OVERVIEW (v2.0)
+                    ================================
+
+    Sentiment-Driven Nuclear Equity Forecasting
+    Daily Frequency Only | FinBERT-LSTM Approach
+
 
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         PHASE 1: DATA COLLECTION                        │
+│                     PHASE 0: FEASIBILITY AUDIT                          │
+│                     (feasibility_audit.py)                               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Download FNSPID dataset from Hugging Face                       │
+  │  Count unique articles per ticker                                │
+  │  Flag tickers with < 50 articles                                 │
+  │  Generate audit report (results/feasibility_audit.yaml)          │
+  │                                                                  │
+  │  Decision: Supplement via scraping OR drop ticker                 │
+  └──────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     PHASE 1: DATA ENGINEERING                           │
 └─────────────────────────────────────────────────────────────────────────┘
 
   ┌─────────────────────────────┐         ┌─────────────────────────────┐
@@ -11,202 +30,133 @@
   │   (quantitative_collector)  │         │    (textual_collector)     │
   └─────────────────────────────┘         └─────────────────────────────┘
               │                                       │
-              │                                       │
   ┌───────────▼──────────┐                ┌──────────▼──────────┐
   │  yfinance API        │                │  FNSPID Dataset     │
-  │  • Daily OHLCV       │                │  (Hugging Face)     │
-  │  • Intraday (1h)     │                │  • Financial News   │
-  │                      │                │  • Headlines        │
-  │  Core Set:           │                └─────────────────────┘
-  │  • SMR, LEU, NNE     │                           │
-  │                      │                ┌──────────▼──────────┐
-  │  Benchmark:          │                │  Web Scraping       │
-  │  • XOM, CVX, NEE     │                │  (Yahoo Finance)    │
-  │  • DUK, SO, D        │                │  • Recent News      │
+  │  Daily OHLCV only    │                │  (Hugging Face)     │
+  │  12-month lookback   │                │  Financial News     │
+  │                      │                └─────────────────────┘
+  │  Core Set:           │                           │
+  │  SMR, LEU, LTBR      │                ┌──────────▼──────────┐
+  │  NXE, NNE, LAC       │                │  Web Scraping       │
+  │                      │                │  (Yahoo Finance)    │
+  │  Benchmark:          │                │  Supplementary      │
+  │  CCJ, CEG, BWXT      │                └─────────────────────┘
+  └──────────────────────┘                           │
+              │                                       │
+              ▼                                       ▼
+  ┌──────────────────────┐                ┌─────────────────────┐
+  │  PREPROCESSING       │                │  TEXT PREPROCESSING  │
+  │  • RSI (14-day)      │                │  • URL removal       │
+  │  • MA (10, 50)       │                │  • Deduplication     │
+  │  • MACD (12/26/9)    │                │  • Relevance filter  │
+  │  • Realized Vol      │                │  • FinBERT tokenize  │
+  │  • Forward Returns   │                │  • Stop words kept   │
+  │  • Min-Max scaling   │                └─────────────────────┘
+  └──────────────────────┘
+              │                                       │
+              ▼                                       ▼
+  ┌────────────────────────┐            ┌─────────────────────────┐
+  │ daily_ohlcv_processed  │            │ news_processed.csv      │
+  │ scalers.pkl            │            │                         │
+  └────────────────────────┘            └─────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     PHASE 2: SENTIMENT ANALYSIS                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │   2a: FINBERT SCORING       │         │   2b: FEATURE ENGINEERING   │
+  │   (sentiment/scorer.py)     │         │   (sentiment/features.py)   │
+  └─────────────────────────────┘         └─────────────────────────────┘
+              │                                       │
+  ┌───────────▼──────────┐                ┌──────────▼──────────┐
+  │  ProsusAI/finbert    │                │  Daily Sentiment    │
+  │  For each headline:  │                │  Index              │
+  │  P(pos), P(neg),     │   ────────>    │  (mean score/day)   │
+  │  P(neu)              │                │                     │
+  │  sentiment_score =   │                │  Sentiment Momentum │
+  │   P(pos) - P(neg)    │                │  (3-day rolling)    │
   └──────────────────────┘                └─────────────────────┘
-              │                                       │
-              │                                       │
-              ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │  RAW DATA                   │         │  RAW NEWS                   │
-  │  data/raw/                  │         │  data/news/                 │
-  │  • daily_ohlcv.csv          │         │  • fnspid_news.csv          │
-  │  • intraday_1h_ohlcv.csv    │         │  • scraped_news.csv         │
-  │                             │         │  • all_news_combined.csv    │
-  └─────────────────────────────┘         └─────────────────────────────┘
+                                                     │
+                                          ┌──────────▼──────────┐
+                                          │  MERGE with price   │
+                                          │  data on (Date,     │
+                                          │  Ticker)            │
+                                          └─────────────────────┘
+                                                     │
+                                                     ▼
+                                          ┌─────────────────────┐
+                                          │ merged_dataset.csv  │
+                                          │ (ready for LSTM)    │
+                                          └─────────────────────┘
 
 
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      PHASE 2: DATA PREPROCESSING                        │
+│                     PHASE 3: LSTM MODELING                              │
 └─────────────────────────────────────────────────────────────────────────┘
 
   ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │  FINANCIAL PREPROCESSOR     │         │  TEXTUAL PREPROCESSOR       │
-  │  (preprocessing.py)         │         │  (preprocessing.py)         │
+  │   BASELINE LSTM             │         │   AUGMENTED LSTM            │
+  │   Price features only:      │         │   Price + Sentiment:        │
+  │   Close, Volume, Returns,   │         │   All baseline features     │
+  │   MA10, MA50, RSI, MACD,    │         │   + Sentiment_Index         │
+  │   Realized_Volatility       │         │   + Sentiment_Momentum      │
   └─────────────────────────────┘         └─────────────────────────────┘
               │                                       │
-              │                                       │
-    ┌─────────▼─────────┐                 ┌──────────▼──────────┐
-    │  Data Cleaning    │                 │  Text Cleaning      │
-    │  • Missing values │                 │  • URLs removal     │
-    │  • Outliers       │                 │  • Normalization    │
-    │  • Validation     │                 │  • Deduplication    │
-    └───────────────────┘                 └─────────────────────┘
-              │                                       │
-    ┌─────────▼─────────┐                 ┌──────────▼──────────┐
-    │  Feature Eng.     │                 │  Tokenization       │
-    │  • RSI            │                 │  • FinBERT          │
-    │  • MACD           │                 │  • Stop-words kept  │
-    │  • MA (5,10,20)   │                 │  • Max 512 tokens   │
-    │  • Volatility     │                 │  • Padding          │
-    │  • Bollinger      │                 └─────────────────────┘
-    └───────────────────┘                            │
-              │                          ┌──────────▼──────────┐
-    ┌─────────▼─────────┐                │  Relevance Filter   │
-    │  Min-Max Scale    │                │  • Ticker match     │
-    │  • Range: [0,1]   │                │  • Keyword filter   │
-    │  • Per ticker     │                │  • Source verify    │
-    │  • Save scalers   │                └─────────────────────┘
-    └───────────────────┘                            │
-              │                                       │
-              ▼                                       ▼
-  ┌─────────────────────────────┐         ┌─────────────────────────────┐
-  │  PROCESSED DATA             │         │  PROCESSED NEWS             │
-  │  data/processed/            │         │  data/processed/            │
-  │  • daily_ohlcv_processed    │         │  • news_processed.csv       │
-  │  • intraday_processed       │         │  • token_count stats        │
-  │  • scalers.pkl              │         │  • cleaned_text             │
-  └─────────────────────────────┘         └─────────────────────────────┘
+              └──────────────┬────────────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  For each ticker │
+                    │  For each target │
+                    │  (1d and 5d)     │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+    │  EVALUATION  │ │  HYPOTHESIS  │ │  SHAP        │
+    │  • MAE       │ │  TESTING     │ │  ANALYSIS    │
+    │  • Dir. Acc. │ │  • H1: sent. │ │  • Feature   │
+    │  • DM test   │ │    improves  │ │    importance│
+    │              │ │  • H2: small │ │  • Core vs   │
+    │              │ │    cap prem. │ │    Benchmark │
+    └──────────────┘ └──────────────┘ └──────────────┘
+              │              │              │
+              └──────────────┼──────────────┘
+                             ▼
+                    ┌─────────────────┐
+                    │     RESULTS     │
+                    │  results/       │
+                    │  • evaluation_  │
+                    │    report.yaml  │
+                    │  • predictions  │
+                    │  • SHAP plots   │
+                    └─────────────────┘
 
 
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    DATA OUTPUT & SYNCHRONIZATION                        │
+│                         EXECUTION                                       │
 └─────────────────────────────────────────────────────────────────────────┘
-
-              ┌─────────────────────────────────┐
-              │     SYNCHRONIZED DATASET        │
-              │  (Ready for Model Training)     │
-              │                                 │
-              │  Features:                      │
-              │  • 20+ Technical Indicators     │
-              │  • Normalized Prices [0,1]      │
-              │  • FinBERT Tokens               │
-              │  • Date Alignment               │
-              │  • Ticker Mapping               │
-              └─────────────────────────────────┘
-                           │
-           ┌───────────────┼───────────────┐
-           │               │               │
-           ▼               ▼               ▼
-    ┌──────────┐   ┌──────────┐   ┌──────────┐
-    │ Phase 3  │   │ Phase 4  │   │ Phase 5  │
-    │Sentiment │   │  Model   │   │Backtest  │
-    │Analysis  │   │  Train   │   │Evaluate  │
-    └──────────┘   └──────────┘   └──────────┘
-
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         PIPELINE EXECUTION                              │
-└─────────────────────────────────────────────────────────────────────────┘
-
-  Command Line Options:
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │ ./run_pipeline.sh                  # Automated (recommended)        │
+  │ python run_all.py                     # All phases                  │
+  │ python run_all.py --phase 0           # Audit only                  │
+  │ python run_all.py --phase 1           # Data only                   │
+  │ python run_all.py --phase 2           # Sentiment only              │
+  │ python run_all.py --phase 3           # Modeling only               │
+  │ python run_all.py --start-from 2      # Resume from Phase 2         │
   │                                                                      │
-  │ python pipeline.py --mode full     # Complete pipeline              │
-  │ python pipeline.py --mode collect  # Collection only                │
-  │ python pipeline.py --mode preprocess # Preprocessing only           │
-  │                                                                      │
-  │ python pipeline.py --no-intraday   # Skip intraday data             │
-  │ python pipeline.py --use-newsapi   # Enable NewsAPI                 │
-  │ python pipeline.py --no-scraping   # Disable web scraping           │
+  │ ./run_pipeline.sh                     # Automated (with venv)        │
+  │ ./run_pipeline.sh audit               # Audit only                   │
+  │ ./run_pipeline.sh sentiment           # Sentiment only               │
   └─────────────────────────────────────────────────────────────────────┘
-
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        KEY FEATURES & BENEFITS                          │
-└─────────────────────────────────────────────────────────────────────────┘
-
-  ✅ QUANTITATIVE PROCESSING           ✅ TEXTUAL PROCESSING
-     • Min-Max normalization               • FinBERT tokenization
-     • 20+ technical indicators            • Stop-word preservation
-     • Multi-timeframe support             • Multi-source aggregation
-     • Outlier detection                   • Relevance filtering
-     • Scaler persistence                  • Deduplication
-
-  ✅ DATA QUALITY                      ✅ USABILITY
-     • Missing value handling              • Single command execution
-     • Validation checks                   • Comprehensive logging
-     • Error recovery                      • Multiple modes
-     • Comprehensive logging               • Well documented
-
-  ✅ PERFORMANCE                       ✅ EXTENSIBILITY
-     • Parallel processing                 • Modular design
-     • Local caching                       • Easy configuration
-     • Rate limiting                       • Plugin architecture
-     • Memory efficient                    • Custom processors
-
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          TICKER COVERAGE                                │
-└─────────────────────────────────────────────────────────────────────────┘
-
-  CORE SET (Nuclear Energy)          BENCHMARK SET (Traditional)
-  ═══════════════════════            ═══════════════════════════
-  
-  SMR  - NuScale Power               XOM  - Exxon Mobil
-         Small Modular Reactors            Oil & Gas Major
-  
-  LEU  - Centrus Energy              CVX  - Chevron
-         Nuclear Fuel                      Oil & Gas Major
-  
-  NNE  - Nano Nuclear Energy         NEE  - NextEra Energy
-         Next-Gen Nuclear                  Clean Energy Leader
-  
-                                     DUK  - Duke Energy
-                                            Major Utility
-  
-                                     SO   - Southern Company
-                                            Major Utility
-  
-                                     D    - Dominion Energy
-                                            Major Utility
-
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           OUTPUT STRUCTURE                              │
-└─────────────────────────────────────────────────────────────────────────┘
-
-  THES_SA/
-  ├── 📋 config.yaml                  # Configuration
-  ├── 📋 requirements.txt             # Dependencies
-  ├── 🚀 run_pipeline.sh              # Quick start
-  ├── 📖 README_NEW.md                # Documentation
-  ├── 📊 IMPLEMENTATION_SUMMARY.md    # This summary
-  │
-  ├── data/
-  │   ├── 🐍 pipeline.py              # Main orchestrator
-  │   ├── 🐍 quantitative_collector.py
-  │   ├── 🐍 textual_collector.py
-  │   ├── 🐍 preprocessing.py
-  │   ├── 🐍 generate_summary.py
-  │   │
-  │   ├── raw/                        # Raw data
-  │   ├── processed/                  # Processed data
-  │   ├── news/                       # News articles
-  │   └── hf_cache/                   # HF cache
-  │
-  ├── notebooks/                      # Jupyter notebooks
-  ├── models/                         # Trained models
-  └── results/                        # Analysis results
 
 
 ═══════════════════════════════════════════════════════════════════════════
 
-                    🎉 DATA ENGINEERING PHASE COMPLETE 🎉
-
-    Next Steps: Phase 2 - Sentiment Analysis with FinBERT
+    Pipeline v2.0 - Revised per advisor feedback (Feb 2026)
+    Daily frequency only | 9 tickers | FinBERT-LSTM | SHAP
 
 ═══════════════════════════════════════════════════════════════════════════
 """
