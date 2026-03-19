@@ -56,7 +56,6 @@ class FeasibilityAuditor:
             dataset = load_dataset(
                 hf_config['dataset'],
                 cache_dir=hf_config.get('cache_dir', 'data/hf_cache'),
-                trust_remote_code=True
             )
 
             if 'train' in dataset:

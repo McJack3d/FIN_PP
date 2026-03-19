@@ -21,11 +21,14 @@ class PipelineSummary:
     """Generate summary statistics and visualizations"""
 
     def __init__(self, config_path: str = "../config.yaml"):
-        with open(config_path, 'r') as f:
+        config_file = Path(config_path)
+        with open(config_file, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        self.processed_path = Path(self.config['paths']['processed'])
-        self.results_path = Path(self.config['paths']['results'])
+        # Resolve paths relative to the config file's parent (project root)
+        project_root = config_file.parent
+        self.processed_path = project_root / self.config['paths']['processed']
+        self.results_path = project_root / self.config['paths']['results']
         self.results_path.mkdir(parents=True, exist_ok=True)
 
         self.core_set = self.config['tickers']['core_set']

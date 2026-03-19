@@ -39,7 +39,8 @@ class FinancialDataPreprocessor:
         filepath = self.raw_path / filename
         logger.info(f"Loading data from {filepath}")
         df = pd.read_csv(filepath)
-        df['Date'] = pd.to_datetime(df['Date'])
+        df['Date'] = pd.to_datetime(df['Date'], utc=True)
+        df['Date'] = df['Date'].dt.tz_localize(None)
         return df
 
     def clean_financial_data(self, df: pd.DataFrame) -> pd.DataFrame:

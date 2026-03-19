@@ -13,7 +13,6 @@ Usage:
 """
 
 import sys
-import os
 import argparse
 import logging
 from pathlib import Path
@@ -68,14 +67,11 @@ def run_phase_1():
 
     # Generate summary visualizations
     try:
-        os.chdir(str(PROJECT_ROOT / 'data'))
         from data.generate_summary import PipelineSummary
         summary = PipelineSummary(config_path=CONFIG_PATH)
         summary.generate_full_report()
     except Exception as e:
         logger.warning(f"Summary generation failed (non-critical): {e}")
-    finally:
-        os.chdir(str(PROJECT_ROOT))
 
 
 def run_phase_2():

@@ -73,7 +73,6 @@ class TextualDataCollector:
             dataset = load_dataset(
                 self.hf_dataset,
                 cache_dir=str(self.hf_cache_dir),
-                trust_remote_code=True
             )
 
             # Convert to pandas DataFrame
@@ -106,20 +105,42 @@ class TextualDataCollector:
             return self._fetch_fnspid_alternative()
 
     def _fetch_fnspid_alternative(self) -> pd.DataFrame:
-        """Alternative method to fetch FNSPID if main method fails"""
+        """Alternative methods to fetch FNSPID if main method fails"""
+        # Try without trust_remote_code (already removed) and with different splits
+        try:
+            from datasets import load_dataset
+            # Some FNSPID mirrors/forks exist - try common alternatives
+            alternatives = [
+                self.hf_dataset,
+                "Zihan1004/FNSPID",
+            ]
+            for ds_name in alternatives:
+                try:
+                    logger.info(f"Trying dataset: {ds_name}...")
+                    dataset = load_dataset(ds_name, cache_dir=str(self.hf_cache_dir))
+                    split_name = list(dataset.keys())[0]
+                    df = dataset[split_name].to_pandas()
+                    logger.info(f"Loaded {len(df)} articles from {ds_name}")
+                    df = self._standardize_columns(df)
+                    return df
+                except Exception:
+                    continue
+        except ImportError:
+            pass
+
+        # Try direct CSV download
         try:
             url = f"https://huggingface.co/datasets/{self.hf_dataset}/resolve/main/data.csv"
-            logger.info(f"Attempting to download from: {url}")
-
+            logger.info(f"Attempting direct download from: {url}")
             df = pd.read_csv(url)
             logger.info(f"Loaded {len(df)} articles via direct download")
-
             df = self._standardize_columns(df)
             return df
-
         except Exception as e:
-            logger.error(f"Alternative fetch also failed: {e}")
-            return pd.DataFrame()
+            logger.warning(f"Direct download failed: {e}")
+
+        logger.warning("FNSPID dataset unavailable. Pipeline will rely on scraped news only.")
+        return pd.DataFrame()
 
     def _standardize_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize column names across different data sources"""
@@ -182,45 +203,45 @@ class TextualDataCollector:
 
     def _scrape_ticker_news(self, ticker: str, max_articles: int) -> List[Dict]:
         """
-        Scrape news for a specific ticker from Yahoo Finance
+        Fetch news for a specific ticker using yfinance news API.
 
         Args:
             ticker: Stock ticker symbol
-            max_articles: Maximum number of articles to scrape
+            max_articles: Maximum number of articles to fetch
 
         Returns:
             List of dictionaries containing news data
         """
-        logger.info(f"Scraping news for {ticker}...")
+        logger.info(f"Fetching news for {ticker} via yfinance...")
 
         try:
-            url = f"https://finance.yahoo.com/quote/{ticker}/news"
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+            import yfinance as yf
 
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+            stock = yf.Ticker(ticker)
+            news = stock.news
 
-            soup = BeautifulSoup(response.content, 'html.parser')
+            if not news:
+                logger.info(f"No news found for {ticker}")
+                return []
 
             news_items = []
-
-            articles = soup.find_all('h3', class_='Mb(5px)')[:max_articles]
-
-            for article in articles:
+            for article in news[:max_articles]:
                 try:
-                    headline = article.get_text().strip()
+                    # yfinance news format: list of dicts with 'title', 'link', 'providerPublishTime', etc.
+                    title = article.get('title', '')
+                    publish_time = article.get('providerPublishTime')
 
-                    link_elem = article.find_parent('a')
-                    link = link_elem.get('href') if link_elem else None
+                    if publish_time:
+                        pub_date = datetime.fromtimestamp(publish_time)
+                    else:
+                        pub_date = datetime.now()
 
                     news_items.append({
-                        'text': headline,
+                        'text': title,
                         'symbol': ticker,
-                        'date': datetime.now(),
-                        'source': 'yahoo_finance',
-                        'url': f"https://finance.yahoo.com{link}" if link else None
+                        'date': pub_date,
+                        'source': article.get('publisher', 'yahoo_finance'),
+                        'url': article.get('link', None)
                     })
                 except Exception as e:
                     logger.debug(f"Error parsing article: {e}")
@@ -230,7 +251,7 @@ class TextualDataCollector:
             return news_items
 
         except Exception as e:
-            logger.error(f"Error scraping Yahoo Finance for {ticker}: {e}")
+            logger.error(f"Error fetching news for {ticker}: {e}")
             return []
 
     def fetch_newsapi_data(self, api_key: Optional[str] = None) -> pd.DataFrame:

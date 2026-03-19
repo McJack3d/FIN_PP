@@ -145,14 +145,18 @@ class DataEngineeringPipeline:
         # Textual preprocessing
         if process_textual:
             logger.info("\n>>> TEXTUAL DATA PREPROCESSING <<<")
-            try:
-                self.text_preprocessor.process_pipeline(
-                    'all_news_combined.csv',
-                    'news_processed.csv'
-                )
-                logger.info("Textual preprocessing completed")
-            except Exception as e:
-                logger.error(f"Textual preprocessing failed: {e}")
+            news_input = Path(self.config['paths']['news']) / 'all_news_combined.csv'
+            if news_input.exists():
+                try:
+                    self.text_preprocessor.process_pipeline(
+                        'all_news_combined.csv',
+                        'news_processed.csv'
+                    )
+                    logger.info("Textual preprocessing completed")
+                except Exception as e:
+                    logger.error(f"Textual preprocessing failed: {e}")
+            else:
+                logger.warning("No news data collected - skipping textual preprocessing")
 
         elapsed = (datetime.now() - start_time).total_seconds()
         logger.info(f"\nPreprocessing completed in {elapsed:.1f} seconds")
@@ -235,7 +239,7 @@ class DataEngineeringPipeline:
 
                     if 'Date' in df.columns or 'date' in df.columns:
                         date_col = 'Date' if 'Date' in df.columns else 'date'
-                        df[date_col] = pd.to_datetime(df[date_col])
+                        df[date_col] = pd.to_datetime(df[date_col], utc=True)
                         logger.info(f"  - Date range: {df[date_col].min()} to {df[date_col].max()}")
 
                 except Exception as e:
