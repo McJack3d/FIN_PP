@@ -53,7 +53,9 @@ def print_environment():
         import torch
         if torch.cuda.is_available():
             logger.info(f"PyTorch GPU: {torch.cuda.get_device_name(0)}")
-            logger.info(f"  VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
+            props = torch.cuda.get_device_properties(0)
+            vram = getattr(props, 'total_memory', getattr(props, 'total_mem', 0))
+            logger.info(f"  VRAM: {vram / 1e9:.1f} GB")
         else:
             logger.info("PyTorch GPU: not available")
     except ImportError:
