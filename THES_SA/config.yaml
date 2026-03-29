@@ -125,8 +125,16 @@ logging:
 environment:
   NEWSAPI_ENV_VAR: NEWSAPI_KEY
 
+kaggle:
+  fnspid_dataset_slug: "elsabetyemane/financial-news-and-stock-price-integration-dataset"
+  fnspid_input_path: "/kaggle/input/financial-news-and-stock-price-integration-dataset"
+  code_dataset_slug: "alexandrebredillot/thes-sa-code"
+  code_input_path: "/kaggle/input/thes-sa-code"
+  working_dir: "/kaggle/working"
+
 notes:
   - "v2.0: Revised per advisor feedback (Feb 2026). Daily frequency only."
   - "Core Set = small-cap nuclear/energy-transition. Benchmark Set = large-cap nuclear/energy."
   - "Phase 0 feasibility audit must pass before running full pipeline."
   - "Replace API key placeholders or set the indicated environment variables."
+  - "For Kaggle: run setup_kaggle.sh to upload code dataset + push kernel."

@@ -63,6 +63,16 @@ class LSTMForecaster:
         logger.info(f"LSTMForecaster initialized (seq_len={self.sequence_length}, "
                     f"hidden={self.hidden_size}, layers={self.num_layers})")
 
+        # Log GPU availability for TensorFlow
+        import tensorflow as tf
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            logger.info(f"TensorFlow GPUs available: {len(gpus)}")
+            for gpu in gpus:
+                logger.info(f"  {gpu.name}")
+        else:
+            logger.info("No TensorFlow GPU detected - using CPU")
+
     def _build_model(self, n_features: int, model_name: str = "lstm"):
         """Build a Keras LSTM model"""
         import tensorflow as tf

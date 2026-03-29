@@ -57,13 +57,61 @@ class TextualDataCollector:
 
         return start, end
 
+    def _load_fnspid_local(self) -> pd.DataFrame:
+        """
+        Try to load FNSPID from a local path (Kaggle /kaggle/input/ or local CSV).
+        Returns empty DataFrame if not found.
+        """
+        kaggle_cfg = self.config.get('kaggle', {})
+        fnspid_path = Path(kaggle_cfg.get('fnspid_input_path',
+                                           '/kaggle/input/financial-news-and-stock-price-integration-dataset'))
+
+        if not fnspid_path.exists():
+            return pd.DataFrame()
+
+        logger.info(f"Found local FNSPID at {fnspid_path}")
+
+        # FNSPID stores per-ticker CSVs (e.g., AAPL.csv) with columns: Article, Date, Stock
+        csv_files = list(fnspid_path.glob('**/*.csv'))
+        if not csv_files:
+            logger.warning(f"No CSV files in {fnspid_path}")
+            return pd.DataFrame()
+
+        dfs = []
+        for csv_file in csv_files:
+            try:
+                df = pd.read_csv(csv_file, on_bad_lines='skip')
+                if len(df) > 0:
+                    dfs.append(df)
+            except Exception as e:
+                logger.debug(f"Skipped {csv_file.name}: {e}")
+
+        if not dfs:
+            return pd.DataFrame()
+
+        combined = pd.concat(dfs, ignore_index=True)
+        logger.info(f"Loaded {len(combined)} articles from {len(dfs)} local FNSPID files")
+        combined = self._standardize_columns(combined)
+        return combined
+
     def fetch_fnspid_dataset(self) -> pd.DataFrame:
         """
-        Fetch FNSPID (Financial News and Stock Price Integration Dataset) from Hugging Face
+        Fetch FNSPID (Financial News and Stock Price Integration Dataset).
+        Checks local path first (Kaggle input), then falls back to Hugging Face.
 
         Returns:
             DataFrame with news headlines and metadata
         """
+        # Try local path first (Kaggle or manual download)
+        local_df = self._load_fnspid_local()
+        if not local_df.empty:
+            start, end = self._compute_dates()
+            if 'date' in local_df.columns:
+                local_df['date'] = pd.to_datetime(local_df['date'], errors='coerce')
+                local_df = local_df[(local_df['date'] >= start) & (local_df['date'] <= end)]
+                logger.info(f"Filtered to {len(local_df)} articles in date range")
+            return local_df
+
         logger.info("Fetching FNSPID dataset from Hugging Face...")
 
         try:

@@ -36,6 +36,9 @@ class SentimentScorer:
         self.tokenizer = None
 
         logger.info(f"SentimentScorer initialized (device: {self.device})")
+        if self.device == 'cuda':
+            logger.info(f"  GPU: {torch.cuda.get_device_name(0)}")
+            logger.info(f"  VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
 
     def load_model(self):
         """Load FinBERT model and tokenizer"""

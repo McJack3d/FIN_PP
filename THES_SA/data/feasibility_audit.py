@@ -45,9 +45,59 @@ class FeasibilityAuditor:
             start = end - timedelta(days=months_back * 30)
             return start, end
 
+    def _load_fnspid_local(self) -> pd.DataFrame:
+        """Try to load FNSPID from local path (Kaggle input or manual download)."""
+        kaggle_cfg = self.config.get('kaggle', {})
+        fnspid_path = Path(kaggle_cfg.get('fnspid_input_path',
+                                           '/kaggle/input/financial-news-and-stock-price-integration-dataset'))
+
+        if not fnspid_path.exists():
+            return pd.DataFrame()
+
+        logger.info(f"Found local FNSPID at {fnspid_path}")
+
+        csv_files = list(fnspid_path.glob('**/*.csv'))
+        if not csv_files:
+            return pd.DataFrame()
+
+        dfs = []
+        for csv_file in csv_files:
+            try:
+                df = pd.read_csv(csv_file, on_bad_lines='skip')
+                if len(df) > 0:
+                    dfs.append(df)
+            except Exception:
+                continue
+
+        if not dfs:
+            return pd.DataFrame()
+
+        combined = pd.concat(dfs, ignore_index=True)
+        logger.info(f"Loaded {len(combined)} articles from {len(dfs)} local FNSPID files")
+
+        # Standardize column names
+        column_mappings = {
+            'headline': 'text', 'headlines': 'text', 'title': 'text',
+            'news': 'text', 'article': 'text',
+            'published': 'date', 'publish_date': 'date', 'timestamp': 'date',
+            'ticker': 'symbol', 'stock': 'symbol', 'company': 'symbol'
+        }
+        for col in combined.columns:
+            if col.lower() in column_mappings:
+                combined.rename(columns={col: column_mappings[col.lower()]}, inplace=True)
+
+        return combined
+
     def load_fnspid(self) -> pd.DataFrame:
-        """Load FNSPID dataset from Hugging Face"""
+        """Load FNSPID dataset from local path (Kaggle) or Hugging Face."""
         logger.info("Loading FNSPID dataset for feasibility audit...")
+
+        # Try local path first (Kaggle or manual download)
+        local_df = self._load_fnspid_local()
+        if not local_df.empty:
+            return local_df
+
+        logger.info("Local FNSPID not found, trying Hugging Face...")
 
         try:
             from datasets import load_dataset
