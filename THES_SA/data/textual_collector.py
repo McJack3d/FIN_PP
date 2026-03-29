@@ -107,7 +107,8 @@ class TextualDataCollector:
         if not local_df.empty:
             start, end = self._compute_dates()
             if 'date' in local_df.columns:
-                local_df['date'] = pd.to_datetime(local_df['date'], errors='coerce')
+                local_df['date'] = pd.to_datetime(local_df['date'], utc=True, errors='coerce')
+                local_df['date'] = local_df['date'].dt.tz_localize(None)
                 local_df = local_df[(local_df['date'] >= start) & (local_df['date'] <= end)]
                 logger.info(f"Filtered to {len(local_df)} articles in date range")
             return local_df

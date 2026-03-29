@@ -148,7 +148,8 @@ class FeasibilityAuditor:
                 break
 
         if date_col:
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            df[date_col] = pd.to_datetime(df[date_col], utc=True, errors='coerce')
+            df[date_col] = df[date_col].dt.tz_localize(None)
             df_filtered = df[(df[date_col] >= start) & (df[date_col] <= end)].copy()
             logger.info(f"Articles in date range: {len(df_filtered)}")
         else:
