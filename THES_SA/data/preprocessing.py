@@ -413,6 +413,7 @@ class TextualDataPreprocessor:
 
         # Filter based on text content
         if 'text' in df.columns:
+            df['text'] = df['text'].astype(str)
             df['is_relevant'] = df['text'].str.contains(
                 combined_pattern,
                 case=False,
