@@ -122,6 +122,12 @@ class SentimentScorer:
         """
         logger.info(f"Scoring {len(df)} articles with FinBERT...")
 
+        if df.empty:
+            logger.warning("No articles to score - returning empty DataFrame")
+            for col in ['positive', 'negative', 'neutral', 'sentiment_score']:
+                df[col] = pd.Series(dtype=float)
+            return df
+
         # Use cleaned_text if available, fall back to text
         if text_column not in df.columns:
             if 'text' in df.columns:
@@ -134,9 +140,13 @@ class SentimentScorer:
 
         # Add scores to dataframe
         df_scored = df.copy()
-        scores_df = pd.DataFrame(scores)
-        for col in scores_df.columns:
-            df_scored[col] = scores_df[col].values
+        if scores:
+            scores_df = pd.DataFrame(scores)
+            for col in scores_df.columns:
+                df_scored[col] = scores_df[col].values
+        else:
+            for col in ['positive', 'negative', 'neutral', 'sentiment_score']:
+                df_scored[col] = 0.0
 
         logger.info(f"Scoring complete. Mean sentiment: {df_scored['sentiment_score'].mean():.4f}")
         logger.info(f"  Positive: {(df_scored['sentiment_score'] > 0.05).sum()} articles")
