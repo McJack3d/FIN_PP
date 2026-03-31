@@ -209,10 +209,12 @@ class PipelineSummary:
 
     def _plot_news_timeline(self, df):
         """Plot news article timeline"""
-        if 'date' not in df.columns:
+        if 'date' not in df.columns or df.empty:
             return
 
         df_clean = df.dropna(subset=['date'])
+        if df_clean.empty:
+            return
         df_clean['date'] = pd.to_datetime(df_clean['date'])
         news_by_date = df_clean.groupby(df_clean['date'].dt.date).size()
 
@@ -233,7 +235,7 @@ class PipelineSummary:
 
     def _plot_news_sources(self, df):
         """Plot news sources distribution"""
-        if 'source' not in df.columns:
+        if 'source' not in df.columns or df.empty:
             return
 
         source_counts = df['source'].value_counts()
