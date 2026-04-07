@@ -60,6 +60,9 @@ class TextualDataCollector:
     def _load_fnspid_local(self) -> pd.DataFrame:
         """
         Try to load FNSPID from a local path (Kaggle /kaggle/input/ or local CSV).
+        The Kaggle FNSPID dataset has a single CSV at:
+            modularization-demo/data/raw_analyst_ratings.csv
+        with columns: headline, url, publisher, date, stock
         Returns empty DataFrame if not found.
         """
         kaggle_cfg = self.config.get('kaggle', {})
@@ -71,17 +74,19 @@ class TextualDataCollector:
 
         logger.info(f"Found local FNSPID at {fnspid_path}")
 
-        # FNSPID stores per-ticker CSVs (e.g., AAPL.csv) with columns: Article, Date, Stock
         csv_files = list(fnspid_path.glob('**/*.csv'))
         if not csv_files:
             logger.warning(f"No CSV files in {fnspid_path}")
             return pd.DataFrame()
+
+        logger.info(f"  Found {len(csv_files)} CSV file(s): {[f.name for f in csv_files[:5]]}")
 
         dfs = []
         for csv_file in csv_files:
             try:
                 df = pd.read_csv(csv_file, on_bad_lines='skip')
                 if len(df) > 0:
+                    logger.info(f"  Loaded {len(df)} rows from {csv_file.name} — columns: {list(df.columns)}")
                     dfs.append(df)
             except Exception as e:
                 logger.debug(f"Skipped {csv_file.name}: {e}")
@@ -90,14 +95,80 @@ class TextualDataCollector:
             return pd.DataFrame()
 
         combined = pd.concat(dfs, ignore_index=True)
-        logger.info(f"Loaded {len(combined)} articles from {len(dfs)} local FNSPID files")
+        logger.info(f"Loaded {len(combined)} total articles from {len(dfs)} FNSPID file(s)")
         combined = self._standardize_columns(combined)
+
+        # Parse dates — FNSPID has mixed formats (with and without timezone)
+        if 'date' in combined.columns:
+            combined['date'] = pd.to_datetime(combined['date'], format='mixed', utc=True, errors='coerce')
+            combined['date'] = combined['date'].dt.tz_localize(None)
+            valid_dates = combined['date'].notna().sum()
+            logger.info(f"  Parsed {valid_dates}/{len(combined)} dates successfully")
+
         return combined
+
+    def _filter_fnspid_for_tickers(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filter FNSPID articles relevant to our ticker universe.
+        Uses both the 'symbol' column (exact match) and keyword search in 'text'.
+        """
+        ticker_keywords = {
+            'SMR': ['SMR', 'NuScale', 'small modular reactor'],
+            'LEU': ['LEU', 'Centrus Energy', 'uranium enrichment'],
+            'LTBR': ['LTBR', 'Lightbridge'],
+            'NXE': ['NXE', 'NexGen Energy'],
+            'NNE': ['NNE', 'Nano Nuclear'],
+            'LAC': ['LAC', 'Lithium Americas'],
+            'CCJ': ['CCJ', 'Cameco'],
+            'CEG': ['CEG', 'Constellation Energy'],
+            'BWXT': ['BWXT', 'BWX Technologies'],
+        }
+
+        matched_dfs = []
+
+        # Match by symbol column (exact ticker match)
+        if 'symbol' in df.columns:
+            for ticker in self.tickers:
+                exact = df[df['symbol'] == ticker].copy()
+                if not exact.empty:
+                    exact['matched_ticker'] = ticker
+                    matched_dfs.append(exact)
+                    logger.info(f"  {ticker}: {len(exact)} articles by stock column")
+
+        # Match by headline keywords
+        if 'text' in df.columns:
+            df['text'] = df['text'].astype(str)
+            for ticker, keywords in ticker_keywords.items():
+                pattern = '|'.join(keywords)
+                keyword_matches = df[df['text'].str.contains(pattern, case=False, na=False, regex=True)].copy()
+                if not keyword_matches.empty:
+                    keyword_matches['matched_ticker'] = ticker
+                    matched_dfs.append(keyword_matches)
+                    logger.info(f"  {ticker}: {len(keyword_matches)} articles by keyword match")
+
+        if not matched_dfs:
+            logger.warning("No FNSPID articles matched any tickers")
+            return pd.DataFrame()
+
+        result = pd.concat(matched_dfs, ignore_index=True)
+        if 'text' in result.columns:
+            result = result.drop_duplicates(subset=['text'], keep='first')
+
+        # Use matched_ticker as the symbol column
+        if 'matched_ticker' in result.columns:
+            result['symbol'] = result['matched_ticker']
+            result.drop(columns=['matched_ticker'], inplace=True)
+
+        logger.info(f"  Total matched: {len(result)} unique articles for {result['symbol'].nunique()} tickers")
+        return result
 
     def fetch_fnspid_dataset(self) -> pd.DataFrame:
         """
         Fetch FNSPID (Financial News and Stock Price Integration Dataset).
         Checks local path first (Kaggle input), then falls back to Hugging Face.
+        NOTE: FNSPID data is from 2009-2020. No date filtering is applied here —
+        articles are filtered to relevant tickers and the merge phase handles
+        date alignment with price data.
 
         Returns:
             DataFrame with news headlines and metadata
@@ -105,13 +176,12 @@ class TextualDataCollector:
         # Try local path first (Kaggle or manual download)
         local_df = self._load_fnspid_local()
         if not local_df.empty:
-            start, end = self._compute_dates()
-            if 'date' in local_df.columns:
-                local_df['date'] = pd.to_datetime(local_df['date'], utc=True, errors='coerce')
-                local_df['date'] = local_df['date'].dt.tz_localize(None)
-                local_df = local_df[(local_df['date'] >= start) & (local_df['date'] <= end)]
-                logger.info(f"Filtered to {len(local_df)} articles in date range")
-            return local_df
+            # Filter to relevant tickers (by symbol + keyword matching)
+            filtered = self._filter_fnspid_for_tickers(local_df)
+            if not filtered.empty:
+                logger.info(f"FNSPID: {len(filtered)} articles for our tickers "
+                            f"(date range: {filtered['date'].min()} to {filtered['date'].max()})")
+            return filtered
 
         logger.info("Fetching FNSPID dataset from Hugging Face...")
 
@@ -253,6 +323,7 @@ class TextualDataCollector:
     def _scrape_ticker_news(self, ticker: str, max_articles: int) -> List[Dict]:
         """
         Fetch news for a specific ticker using yfinance news API.
+        Handles both old format (flat dict) and new format (nested 'content' dict).
 
         Args:
             ticker: Stock ticker symbol
@@ -273,35 +344,87 @@ class TextualDataCollector:
                 logger.info(f"No news found for {ticker}")
                 return []
 
+            # Log raw format of first item for debugging
+            if news:
+                sample = news[0]
+                logger.info(f"  yfinance news format keys: {list(sample.keys()) if isinstance(sample, dict) else type(sample)}")
+                if isinstance(sample, dict) and 'content' in sample:
+                    logger.info(f"  nested content keys: {list(sample['content'].keys())}")
+
             news_items = []
             for article in news[:max_articles]:
                 try:
-                    # yfinance news format: list of dicts with 'title', 'link', 'providerPublishTime', etc.
-                    title = article.get('title', '')
-                    publish_time = article.get('providerPublishTime')
-
-                    if publish_time:
-                        pub_date = datetime.fromtimestamp(publish_time)
-                    else:
-                        pub_date = datetime.now()
-
-                    news_items.append({
-                        'text': title,
-                        'symbol': ticker,
-                        'date': pub_date,
-                        'source': article.get('publisher', 'yahoo_finance'),
-                        'url': article.get('link', None)
-                    })
+                    title, pub_date, source, url = self._parse_yf_article(article, ticker)
+                    if title:
+                        news_items.append({
+                            'text': title,
+                            'symbol': ticker,
+                            'date': pub_date,
+                            'source': source,
+                            'url': url
+                        })
                 except Exception as e:
                     logger.debug(f"Error parsing article: {e}")
                     continue
 
-            logger.info(f"Found {len(news_items)} articles for {ticker}")
+            logger.info(f"Found {len(news_items)} articles with text for {ticker}")
             return news_items
 
         except Exception as e:
             logger.error(f"Error fetching news for {ticker}: {e}")
             return []
+
+    def _parse_yf_article(self, article: dict, ticker: str) -> tuple:
+        """
+        Parse a single yfinance news article, handling both old and new API formats.
+
+        Old format (yfinance < 0.2.36):
+            {'title': '...', 'link': '...', 'providerPublishTime': 1234567890, 'publisher': '...'}
+
+        New format (yfinance >= 0.2.36):
+            {'content': {'title': '...', 'pubDate': '...', 'provider': {'displayName': '...'},
+                         'clickThroughUrl': {'url': '...'}, 'summary': '...'}, 'contentType': 'STORY'}
+
+        Returns:
+            (title, pub_date, source, url)
+        """
+        title = ''
+        pub_date = datetime.now()
+        source = 'yahoo_finance'
+        url = ''
+
+        # New format: nested under 'content'
+        if 'content' in article and isinstance(article['content'], dict):
+            content = article['content']
+            title = content.get('title', '')
+            source = content.get('provider', {}).get('displayName', 'yahoo_finance') if isinstance(content.get('provider'), dict) else content.get('provider', 'yahoo_finance')
+            url = content.get('clickThroughUrl', {}).get('url', '') if isinstance(content.get('clickThroughUrl'), dict) else content.get('url', '')
+
+            pub_str = content.get('pubDate', '')
+            if pub_str:
+                try:
+                    pub_date = pd.to_datetime(pub_str, utc=True).to_pydatetime().replace(tzinfo=None)
+                except Exception:
+                    pub_date = datetime.now()
+
+            # Use summary as fallback if title is empty
+            if not title:
+                title = content.get('summary', '')
+
+        # Old format: flat dict
+        else:
+            title = article.get('title', '')
+            source = article.get('publisher', 'yahoo_finance')
+            url = article.get('link', '')
+
+            publish_time = article.get('providerPublishTime')
+            if publish_time and isinstance(publish_time, (int, float)):
+                try:
+                    pub_date = datetime.fromtimestamp(publish_time)
+                except Exception:
+                    pub_date = datetime.now()
+
+        return title, pub_date, source, url
 
     def fetch_newsapi_data(self, api_key: Optional[str] = None) -> pd.DataFrame:
         """

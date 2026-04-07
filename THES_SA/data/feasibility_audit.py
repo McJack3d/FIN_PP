@@ -60,11 +60,14 @@ class FeasibilityAuditor:
         if not csv_files:
             return pd.DataFrame()
 
+        logger.info(f"  Found {len(csv_files)} CSV file(s): {[f.name for f in csv_files[:5]]}")
+
         dfs = []
         for csv_file in csv_files:
             try:
                 df = pd.read_csv(csv_file, on_bad_lines='skip')
                 if len(df) > 0:
+                    logger.info(f"  Loaded {len(df)} rows from {csv_file.name} — columns: {list(df.columns)}")
                     dfs.append(df)
             except Exception:
                 continue
@@ -73,7 +76,7 @@ class FeasibilityAuditor:
             return pd.DataFrame()
 
         combined = pd.concat(dfs, ignore_index=True)
-        logger.info(f"Loaded {len(combined)} articles from {len(dfs)} local FNSPID files")
+        logger.info(f"Loaded {len(combined)} total articles from FNSPID")
 
         # Standardize column names
         column_mappings = {
@@ -148,10 +151,15 @@ class FeasibilityAuditor:
                 break
 
         if date_col:
-            df[date_col] = pd.to_datetime(df[date_col], utc=True, errors='coerce')
+            df[date_col] = pd.to_datetime(df[date_col], format='mixed', utc=True, errors='coerce')
             df[date_col] = df[date_col].dt.tz_localize(None)
-            df_filtered = df[(df[date_col] >= start) & (df[date_col] <= end)].copy()
-            logger.info(f"Articles in date range: {len(df_filtered)}")
+            valid_dates = df[date_col].notna().sum()
+            logger.info(f"Parsed {valid_dates}/{len(df)} dates successfully")
+            # FNSPID spans 2009-2020 — don't filter by study window for audit
+            # Show full coverage regardless of date range
+            df_filtered = df.dropna(subset=[date_col]).copy()
+            logger.info(f"Articles with valid dates: {len(df_filtered)} "
+                        f"(range: {df_filtered[date_col].min().date()} to {df_filtered[date_col].max().date()})")
         else:
             df_filtered = df.copy()
             logger.warning("No date column found - auditing all articles")
