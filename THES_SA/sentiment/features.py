@@ -174,11 +174,17 @@ class SentimentFeatureEngineer:
 
         df_price = pd.read_csv(price_path)
         df_price['Date'] = pd.to_datetime(df_price['Date'])
+        # Normalize to date-only (strip time) for merge — price dates may have
+        # time components (e.g., 04:00:00 from yfinance timezone conversion)
+        df_price['Date'] = df_price['Date'].dt.normalize()
 
         # Merge
         sentiment_cols = ['Date', 'Ticker', 'Sentiment_Index', 'Sentiment_Momentum',
                          'Article_Count', 'Positive_Ratio', 'Negative_Ratio']
         available_cols = [c for c in sentiment_cols if c in df_sentiment.columns]
+
+        # Ensure sentiment dates are also normalized
+        df_sentiment['Date'] = pd.to_datetime(df_sentiment['Date']).dt.normalize()
 
         df_merged = df_price.merge(
             df_sentiment[available_cols],
