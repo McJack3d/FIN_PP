@@ -40,12 +40,12 @@ tickers:
 dates:
   start_date: null         # use YYYY-MM-DD or null
   end_date: null           # use YYYY-MM-DD or null
-  months_back: 12          # 12-month lookback (v2.0 requirement)
+  months_back: 24          # 24-month lookback for more training data
 
 yfinance:
   intervals:
     daily: "1d"
-  period: "1y"
+  period: "2y"
   auto_adjust: true
   prepost: false
   threads: true
@@ -98,14 +98,14 @@ model:
   random_state: 42
 
 lstm:
-  sequence_length: 20        # lookback window (trading days)
-  hidden_size: 64
+  sequence_length: 15        # shorter window — more sequences from limited data
+  hidden_size: 128           # larger hidden state for richer representations
   num_layers: 2
-  dropout: 0.2
-  epochs: 100
-  batch_size: 32
-  learning_rate: 0.001
-  early_stopping_patience: 10
+  dropout: 0.3               # stronger regularization with more capacity
+  epochs: 200                # more epochs — early stopping controls overfitting
+  batch_size: 16             # smaller batches for better gradient signal
+  learning_rate: 0.0005      # slower learning rate with larger model
+  early_stopping_patience: 15
   validation_split: 0.1
 
 thresholds:

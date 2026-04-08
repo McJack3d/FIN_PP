@@ -508,6 +508,155 @@ class TextualDataCollector:
 
         return pd.DataFrame()
 
+    def scrape_google_news_rss(self, tickers: Optional[List[str]] = None) -> pd.DataFrame:
+        """
+        Fetch news headlines from Google News RSS feeds.
+        No API key needed — public RSS endpoint.
+        """
+        if tickers is None:
+            tickers = self.tickers
+
+        logger.info(f"Fetching Google News RSS for {len(tickers)} tickers...")
+
+        ticker_queries = {
+            'SMR': 'NuScale+Power+SMR+stock',
+            'LEU': 'Centrus+Energy+LEU+stock',
+            'LTBR': 'Lightbridge+LTBR+stock',
+            'NXE': 'NexGen+Energy+NXE+stock',
+            'NNE': 'Nano+Nuclear+Energy+NNE+stock',
+            'LAC': 'Lithium+Americas+LAC+stock',
+            'CCJ': 'Cameco+CCJ+stock',
+            'CEG': 'Constellation+Energy+CEG+stock',
+            'BWXT': 'BWX+Technologies+BWXT+stock',
+        }
+
+        all_articles = []
+
+        for ticker in tickers:
+            query = ticker_queries.get(ticker, f'{ticker}+stock')
+            rss_url = f'https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en'
+
+            try:
+                resp = requests.get(rss_url, timeout=15, headers={
+                    'User-Agent': 'Mozilla/5.0 (compatible; research-bot)'
+                })
+                resp.raise_for_status()
+
+                soup = BeautifulSoup(resp.content, 'xml')
+                items = soup.find_all('item')
+
+                for item in items:
+                    title = item.find('title')
+                    pub_date_tag = item.find('pubDate')
+                    link = item.find('link')
+                    source_tag = item.find('source')
+
+                    title_text = title.get_text(strip=True) if title else ''
+                    if not title_text:
+                        continue
+
+                    pub_date = datetime.now()
+                    if pub_date_tag:
+                        try:
+                            pub_date = pd.to_datetime(pub_date_tag.get_text(), utc=True).to_pydatetime().replace(tzinfo=None)
+                        except Exception:
+                            pass
+
+                    all_articles.append({
+                        'text': title_text,
+                        'symbol': ticker,
+                        'date': pub_date,
+                        'source': source_tag.get_text(strip=True) if source_tag else 'google_news',
+                        'url': link.get_text(strip=True) if link else '',
+                    })
+
+                logger.info(f"  {ticker}: {len(items)} articles from Google News RSS")
+                time.sleep(1)
+
+            except Exception as e:
+                logger.warning(f"  {ticker}: Google News RSS failed ({e})")
+                continue
+
+        if all_articles:
+            df = pd.DataFrame(all_articles)
+            logger.info(f"Google News RSS: {len(df)} total articles")
+            return df
+
+        return pd.DataFrame()
+
+    def scrape_finviz_news(self, tickers: Optional[List[str]] = None) -> pd.DataFrame:
+        """
+        Scrape news headlines from Finviz ticker pages.
+        """
+        if tickers is None:
+            tickers = self.tickers
+
+        logger.info(f"Scraping Finviz news for {len(tickers)} tickers...")
+        all_articles = []
+
+        for ticker in tickers:
+            url = f'https://finviz.com/quote.ashx?t={ticker}'
+            try:
+                resp = requests.get(url, timeout=15, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                resp.raise_for_status()
+
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                news_table = soup.find(id='news-table')
+
+                if not news_table:
+                    logger.info(f"  {ticker}: no news table on Finviz")
+                    continue
+
+                rows = news_table.find_all('tr')
+                current_date = datetime.now()
+
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) < 2:
+                        continue
+
+                    date_cell = cols[0].get_text(strip=True)
+                    link_tag = cols[1].find('a')
+
+                    if not link_tag:
+                        continue
+
+                    title = link_tag.get_text(strip=True)
+                    article_url = link_tag.get('href', '')
+
+                    # Parse date — Finviz shows "Apr-07-26 09:30AM" or just "09:30AM"
+                    try:
+                        if len(date_cell) > 8:
+                            current_date = pd.to_datetime(date_cell, errors='coerce')
+                            if pd.isna(current_date):
+                                current_date = datetime.now()
+                    except Exception:
+                        pass
+
+                    all_articles.append({
+                        'text': title,
+                        'symbol': ticker,
+                        'date': current_date,
+                        'source': 'finviz',
+                        'url': article_url,
+                    })
+
+                logger.info(f"  {ticker}: {len([a for a in all_articles if a['symbol'] == ticker])} articles from Finviz")
+                time.sleep(2)  # Respect rate limits
+
+            except Exception as e:
+                logger.warning(f"  {ticker}: Finviz scraping failed ({e})")
+                continue
+
+        if all_articles:
+            df = pd.DataFrame(all_articles)
+            logger.info(f"Finviz: {len(df)} total articles")
+            return df
+
+        return pd.DataFrame()
+
     def save_data(self, df: pd.DataFrame, filename: str):
         """Save DataFrame to CSV in news data directory"""
         filepath = self.news_path / filename
@@ -546,11 +695,23 @@ class TextualDataCollector:
 
         # Scrape recent news if enabled
         if use_scraping:
-            logger.info("\n--- Scraping Recent News ---")
+            logger.info("\n--- Scraping Recent News (yfinance) ---")
             scraped_df = self.scrape_recent_news()
             if not scraped_df.empty:
                 all_dataframes.append(scraped_df)
                 self.save_data(scraped_df, 'scraped_news.csv')
+
+            logger.info("\n--- Scraping Google News RSS ---")
+            gnews_df = self.scrape_google_news_rss()
+            if not gnews_df.empty:
+                all_dataframes.append(gnews_df)
+                self.save_data(gnews_df, 'google_news.csv')
+
+            logger.info("\n--- Scraping Finviz News ---")
+            finviz_df = self.scrape_finviz_news()
+            if not finviz_df.empty:
+                all_dataframes.append(finviz_df)
+                self.save_data(finviz_df, 'finviz_news.csv')
 
         # Combine all sources
         if all_dataframes:
