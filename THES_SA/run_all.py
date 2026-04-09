@@ -130,6 +130,14 @@ def run_phase_3():
         logger.warning(f"SHAP analysis failed (non-critical): {e}")
         logger.info("You can re-run SHAP separately after fixing the issue.")
 
+    # Phase 3d: Thesis Visualizations
+    try:
+        from models.visualizations import ThesisVisualizations
+        viz = ThesisVisualizations(CONFIG_PATH)
+        viz.generate_all(experiment_results)
+    except Exception as e:
+        logger.warning(f"Thesis visualizations failed (non-critical): {e}")
+
     return eval_report
 
 

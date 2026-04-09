@@ -309,6 +309,14 @@ def run_phase_3(config_path):
     except Exception as e:
         logger.warning(f"SHAP analysis failed (non-critical): {e}")
 
+    # Thesis visualizations
+    try:
+        from models.visualizations import ThesisVisualizations
+        viz = ThesisVisualizations(str(config_path))
+        viz.generate_all(experiment_results)
+    except Exception as e:
+        logger.warning(f"Thesis visualizations failed (non-critical): {e}")
+
     return eval_report
 
 

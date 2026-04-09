@@ -10,6 +10,8 @@ from pathlib import Path
 import yaml
 import logging
 from typing import Dict, Optional
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +30,7 @@ class SHAPAnalyzer:
 
         self.core_set = self.config['tickers']['core_set']
         self.benchmark_set = self.config['tickers']['benchmark_set']
+        self.seq_len = self.config['lstm']['sequence_length']
 
         logger.info("SHAPAnalyzer initialized")
 
@@ -48,13 +51,18 @@ class SHAPAnalyzer:
         """
         import shap
 
+        n_features = len(feature_names)
+        seq_len = X_test.shape[1]
+
         logger.info(f"Computing SHAP values ({X_test.shape[0]} samples, "
-                    f"{len(feature_names)} features)...")
+                    f"{n_features} features, seq_len={seq_len})...")
 
         # Use a subset for background data
         bg_size = min(n_background, X_test.shape[0])
         bg_indices = np.random.choice(X_test.shape[0], bg_size, replace=False)
         background = X_test[bg_indices]
+
+        shap_values = None
 
         try:
             # Try DeepExplainer first (faster for neural networks)
@@ -66,12 +74,11 @@ class SHAPAnalyzer:
                 shap_values = shap_values[0]
 
         except Exception as e:
-            logger.warning(f"DeepExplainer failed ({e}), falling back to KernelExplainer")
+            logger.warning(f"DeepExplainer failed ({type(e).__name__}), falling back to KernelExplainer")
 
             # Flatten sequences for KernelExplainer
             def model_predict(x):
-                # Reshape flat input back to sequences
-                x_reshaped = x.reshape(-1, X_test.shape[1], X_test.shape[2])
+                x_reshaped = x.reshape(-1, seq_len, n_features)
                 return model.predict(x_reshaped, verbose=0).flatten()
 
             X_flat = X_test.reshape(X_test.shape[0], -1)
@@ -80,14 +87,32 @@ class SHAPAnalyzer:
             explainer = shap.KernelExplainer(model_predict, bg_flat)
             shap_values = explainer.shap_values(X_flat, nsamples=200)
 
-        # Average SHAP values over the sequence dimension if needed
+        # Reshape and average over the sequence dimension
         if len(shap_values.shape) == 3:
-            # Shape: (n_samples, seq_len, n_features) -> average over seq_len
+            # Already (n_samples, seq_len, n_features) from DeepExplainer
             shap_values_avg = np.mean(shap_values, axis=1)
-        else:
+        elif len(shap_values.shape) == 2 and shap_values.shape[1] == seq_len * n_features:
+            # Flattened from KernelExplainer: (n_samples, seq_len * n_features)
+            # Reshape back to 3D and average over timesteps
+            logger.info(f"Reshaping flat SHAP ({shap_values.shape[1]}) -> "
+                        f"({seq_len}, {n_features}) and averaging over timesteps")
+            shap_3d = shap_values.reshape(shap_values.shape[0], seq_len, n_features)
+            shap_values_avg = np.mean(shap_3d, axis=1)
+        elif len(shap_values.shape) == 2 and shap_values.shape[1] == n_features:
+            # Already aggregated (unlikely but safe)
             shap_values_avg = shap_values
+        else:
+            logger.warning(f"Unexpected SHAP shape {shap_values.shape} for "
+                           f"{n_features} features, seq_len={seq_len}. Attempting reshape.")
+            try:
+                shap_3d = shap_values.reshape(shap_values.shape[0], seq_len, n_features)
+                shap_values_avg = np.mean(shap_3d, axis=1)
+            except ValueError:
+                logger.error(f"Cannot reshape SHAP values. Skipping.")
+                return {}
 
-        logger.info(f"SHAP values computed: shape {shap_values_avg.shape}")
+        logger.info(f"SHAP values computed: shape {shap_values_avg.shape} "
+                    f"(matches {n_features} features: {shap_values_avg.shape[1] == n_features})")
 
         return {
             'shap_values': shap_values_avg,
