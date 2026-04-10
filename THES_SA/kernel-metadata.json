@@ -1,0 +1,16 @@
+{
+  "id": "alexandrebredillot/thes-sa-sentiment-nuclear-forecasting",
+  "title": "THES_SA Sentiment Nuclear Forecasting",
+  "code_file": "kaggle_notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "competition_sources": [],
+  "dataset_sources": [
+    "elsabetyemane/financial-news-and-stock-price-integration-dataset",
+    "alexandrebredillot/thes-sa-code"
+  ],
+  "kernel_sources": []
+}

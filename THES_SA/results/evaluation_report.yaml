@@ -1,0 +1,322 @@
+Forward_Return_1d:
+  evaluation_metrics:
+  - Ticker: BWXT
+    Group: benchmark_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.026153378446089896
+    MAE_Augmented: 0.025259892813629066
+    MAE_Improvement: 0.0008934856324608297
+    MAE_Improvement_Pct: 3.416329688734389
+    RMSE_Baseline: 0.03464531375712723
+    RMSE_Augmented: 0.033588135791401325
+    DA_Baseline: 45.94594594594595
+    DA_Augmented: 43.24324324324324
+    DM_Statistic: 1.6899371322403924
+    DM_PValue: 0.09103998273898406
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: CCJ
+    Group: benchmark_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.027741210224355196
+    MAE_Augmented: 0.028310141347053914
+    MAE_Improvement: -0.0005689311226987175
+    MAE_Improvement_Pct: -2.050851848558606
+    RMSE_Baseline: 0.035089095268321324
+    RMSE_Augmented: 0.03586547940011777
+    DA_Baseline: 40.54054054054054
+    DA_Augmented: 44.5945945945946
+    DM_Statistic: -1.1328422438930164
+    DM_PValue: 0.2572805078363918
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: CEG
+    Group: benchmark_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.02482908748226412
+    MAE_Augmented: 0.024372479624373316
+    MAE_Improvement: 0.00045660785789080477
+    MAE_Improvement_Pct: 1.8390037822250547
+    RMSE_Baseline: 0.03378100439773157
+    RMSE_Augmented: 0.0331934602025224
+    DA_Baseline: 43.24324324324324
+    DA_Augmented: 54.054054054054056
+    DM_Statistic: 1.3424492935856955
+    DM_PValue: 0.17945036091985012
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: LAC
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.03564172797825221
+    MAE_Augmented: 0.03539788781891747
+    MAE_Improvement: 0.00024384015933474196
+    MAE_Improvement_Pct: 0.684142361121009
+    RMSE_Baseline: 0.04522772373610767
+    RMSE_Augmented: 0.04501955704126646
+    DA_Baseline: 47.2972972972973
+    DA_Augmented: 51.35135135135135
+    DM_Statistic: 0.15691902677223293
+    DM_PValue: 0.8753086644295898
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: LEU
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.052334823592346126
+    MAE_Augmented: 0.0571117223841471
+    MAE_Improvement: -0.004776898791800974
+    MAE_Improvement_Pct: -9.12757216688046
+    RMSE_Baseline: 0.06592978105855457
+    RMSE_Augmented: 0.0709063136504454
+    DA_Baseline: 47.2972972972973
+    DA_Augmented: 48.64864864864865
+    DM_Statistic: -5.1783529265384285
+    DM_PValue: 2.238534475562659e-07
+    DM_Significant: true
+    DM_Interpretation: Baseline model significantly outperforms augmented (p<0.05)
+    N_Test: 74
+  - Ticker: LTBR
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.048808183660107154
+    MAE_Augmented: 0.048445250276327005
+    MAE_Improvement: 0.00036293338378014933
+    MAE_Improvement_Pct: 0.7435912516383785
+    RMSE_Baseline: 0.05976393314035368
+    RMSE_Augmented: 0.060931914295776886
+    DA_Baseline: 44.5945945945946
+    DA_Augmented: 44.5945945945946
+    DM_Statistic: -0.7506181987571733
+    DM_PValue: 0.45288246550571465
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: NNE
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.044700667165217985
+    MAE_Augmented: 0.043849106632356735
+    MAE_Improvement: 0.0008515605328612494
+    MAE_Improvement_Pct: 1.9050286871867024
+    RMSE_Baseline: 0.05302653445753063
+    RMSE_Augmented: 0.052346890104685045
+    DA_Baseline: 40.27777777777778
+    DA_Augmented: 48.61111111111111
+    DM_Statistic: 1.1159440023202762
+    DM_PValue: 0.26444610506411914
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 72
+  - Ticker: NXE
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.027473323030788543
+    MAE_Augmented: 0.028306094220587486
+    MAE_Improvement: -0.0008327711897989434
+    MAE_Improvement_Pct: -3.0311993524251917
+    RMSE_Baseline: 0.03548670860635563
+    RMSE_Augmented: 0.03633678691845247
+    DA_Baseline: 40.54054054054054
+    DA_Augmented: 44.5945945945946
+    DM_Statistic: -1.4722248627076167
+    DM_PValue: 0.14096016558797664
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 74
+  - Ticker: SMR
+    Group: core_set
+    Target: Forward_Return_1d
+    MAE_Baseline: 0.046417838044797016
+    MAE_Augmented: 0.04564345612346355
+    MAE_Improvement: 0.0007743819213334655
+    MAE_Improvement_Pct: 1.6682851980010862
+    RMSE_Baseline: 0.058746826154891116
+    RMSE_Augmented: 0.057511448687776724
+    DA_Baseline: 50.0
+    DA_Augmented: 48.64864864864865
+    DM_Statistic: 2.1003865818810774
+    DM_PValue: 0.03569484840382442
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 74
+  h1_result:
+    supported: false
+    avg_mae_improvement_pct: -1.1929540035597463
+    tickers_improved: 4
+    tickers_significant: 2
+    total_tickers: 6
+    avg_da_baseline: 45.001251251251254
+    avg_da_augmented: 47.741491491491495
+  h2_result:
+    supported: false
+    core_avg_improvement_pct: -1.1929540035597463
+    benchmark_avg_improvement_pct: 1.0681605408002792
+    sentiment_premium_pct: -2.2611145443600256
+    t_statistic: -0.9482505711062754
+    p_value: 0.8103520864174145
+Forward_Return_5d:
+  evaluation_metrics:
+  - Ticker: BWXT
+    Group: benchmark_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.056960813099076905
+    MAE_Augmented: 0.06928630160856684
+    MAE_Improvement: -0.012325488509489939
+    MAE_Improvement_Pct: -21.638540320783594
+    RMSE_Baseline: 0.07039103486315956
+    RMSE_Augmented: 0.08180448576371384
+    DA_Baseline: 41.0958904109589
+    DA_Augmented: 41.0958904109589
+    DM_Statistic: -4.5718384791239215
+    DM_PValue: 4.834635541017818e-06
+    DM_Significant: true
+    DM_Interpretation: Baseline model significantly outperforms augmented (p<0.05)
+    N_Test: 73
+  - Ticker: CCJ
+    Group: benchmark_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.06136107383211634
+    MAE_Augmented: 0.05903783256396105
+    MAE_Improvement: 0.0023232412681552933
+    MAE_Improvement_Pct: 3.786180917419523
+    RMSE_Baseline: 0.07641537270937208
+    RMSE_Augmented: 0.07353319273640774
+    DA_Baseline: 45.20547945205479
+    DA_Augmented: 45.20547945205479
+    DM_Statistic: 3.6748323969970635
+    DM_PValue: 0.0002380056022011079
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 73
+  - Ticker: CEG
+    Group: benchmark_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.06417631850725655
+    MAE_Augmented: 0.05804287200062795
+    MAE_Improvement: 0.006133446506628601
+    MAE_Improvement_Pct: 9.557180357634692
+    RMSE_Baseline: 0.07692684289586384
+    RMSE_Augmented: 0.06974361927990169
+    DA_Baseline: 38.35616438356164
+    DA_Augmented: 57.534246575342465
+    DM_Statistic: 2.6528904254715147
+    DM_PValue: 0.007980577336184735
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 73
+  - Ticker: LAC
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.11496449759018064
+    MAE_Augmented: 0.11135711043921742
+    MAE_Improvement: 0.0036073871509632177
+    MAE_Improvement_Pct: 3.1378270914753528
+    RMSE_Baseline: 0.139516170007862
+    RMSE_Augmented: 0.1371910838822692
+    DA_Baseline: 57.534246575342465
+    DA_Augmented: 57.534246575342465
+    DM_Statistic: 3.114139592138182
+    DM_PValue: 0.0018448218651148096
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 73
+  - Ticker: LEU
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.18012664085148516
+    MAE_Augmented: 0.18776823216960234
+    MAE_Improvement: -0.007641591318117175
+    MAE_Improvement_Pct: -4.24234376547203
+    RMSE_Baseline: 0.2076847618070021
+    RMSE_Augmented: 0.21560580982745625
+    DA_Baseline: 43.83561643835616
+    DA_Augmented: 43.83561643835616
+    DM_Statistic: -5.1363518836626385
+    DM_PValue: 2.801229352922263e-07
+    DM_Significant: true
+    DM_Interpretation: Baseline model significantly outperforms augmented (p<0.05)
+    N_Test: 73
+  - Ticker: LTBR
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.09264988968389422
+    MAE_Augmented: 0.08329802507563604
+    MAE_Improvement: 0.009351864608258181
+    MAE_Improvement_Pct: 10.093767666820936
+    RMSE_Baseline: 0.11537872797948472
+    RMSE_Augmented: 0.10580992956439988
+    DA_Baseline: 36.986301369863014
+    DA_Augmented: 45.20547945205479
+    DM_Statistic: 4.0905602303877835
+    DM_PValue: 4.303324340360071e-05
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 73
+  - Ticker: NNE
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.1046285473448852
+    MAE_Augmented: 0.0903311218172913
+    MAE_Improvement: 0.014297425527593902
+    MAE_Improvement_Pct: 13.664937429041766
+    RMSE_Baseline: 0.1307063875024412
+    RMSE_Augmented: 0.11544809037965825
+    DA_Baseline: 32.3943661971831
+    DA_Augmented: 49.29577464788733
+    DM_Statistic: 1.8238720960392663
+    DM_PValue: 0.06817141110730462
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 71
+  - Ticker: NXE
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.07870993547865036
+    MAE_Augmented: 0.07321291418303277
+    MAE_Improvement: 0.005497021295617591
+    MAE_Improvement_Pct: 6.983897600968849
+    RMSE_Baseline: 0.09313480833933893
+    RMSE_Augmented: 0.08797416481874379
+    DA_Baseline: 43.83561643835616
+    DA_Augmented: 43.83561643835616
+    DM_Statistic: 3.586589109043429
+    DM_PValue: 0.0003350316103050144
+    DM_Significant: true
+    DM_Interpretation: Augmented model significantly outperforms baseline (p<0.05)
+    N_Test: 73
+  - Ticker: SMR
+    Group: core_set
+    Target: Forward_Return_5d
+    MAE_Baseline: 0.08630703112729614
+    MAE_Augmented: 0.08508252937801895
+    MAE_Improvement: 0.0012245017492771848
+    MAE_Improvement_Pct: 1.418774036464237
+    RMSE_Baseline: 0.11913997039112417
+    RMSE_Augmented: 0.11901530617303559
+    DA_Baseline: 47.94520547945205
+    DA_Augmented: 53.42465753424658
+    DM_Statistic: 0.11257536570284199
+    DM_PValue: 0.9103672161946326
+    DM_Significant: false
+    DM_Interpretation: No significant difference between models (p>=0.05)
+    N_Test: 73
+  h1_result:
+    supported: true
+    avg_mae_improvement_pct: 5.176143343216519
+    tickers_improved: 5
+    tickers_significant: 4
+    total_tickers: 6
+    avg_da_baseline: 43.755225416425496
+    avg_da_augmented: 48.855231847707245
+  h2_result:
+    supported: false
+    core_avg_improvement_pct: 5.176143343216519
+    benchmark_avg_improvement_pct: -2.7650596819097935
+    sentiment_premium_pct: 7.941203025126312
+    t_statistic: 0.799290555882648
+    p_value: 0.24907553382353328

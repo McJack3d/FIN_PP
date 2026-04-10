@@ -1,1 +1,19 @@
 *.io
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# macOS
+.DS_Store
+
+# Kaggle workspace artifacts (raw pulls, logs, zips)
+THES_SA/kaggle_output/
+kaggle.yml
+
+# Local data caches
+data/
+THES_SA/data/results/
