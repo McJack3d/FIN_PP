@@ -1,0 +1,47 @@
+audit_date: '2026-04-09T15:17:48.419006'
+min_articles_threshold: 50
+total_tickers: 9
+passing_tickers: 5
+failing_tickers: 4
+results:
+  SMR:
+    article_count: 15
+    group: core_set
+    status: FAIL
+  LEU:
+    article_count: 3698
+    group: core_set
+    status: PASS
+  LTBR:
+    article_count: 109
+    group: core_set
+    status: PASS
+  NXE:
+    article_count: 19
+    group: core_set
+    status: FAIL
+  NNE:
+    article_count: 10274
+    group: core_set
+    status: PASS
+  LAC:
+    article_count: 10202
+    group: core_set
+    status: PASS
+  CCJ:
+    article_count: 232
+    group: benchmark_set
+    status: PASS
+  CEG:
+    article_count: 49
+    group: benchmark_set
+    status: FAIL
+  BWXT:
+    article_count: 3
+    group: benchmark_set
+    status: FAIL
+recommendations:
+- 'SMR: Supplement with Yahoo Finance scraping (only 15 articles, need 50)'
+- 'NXE: Supplement with Yahoo Finance scraping (only 19 articles, need 50)'
+- 'CEG: Supplement with Yahoo Finance scraping (only 49 articles, need 50)'
+- 'BWXT: Supplement with Yahoo Finance scraping (only 3 articles, need 50)'

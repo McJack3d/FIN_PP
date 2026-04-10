@@ -1,0 +1,118 @@
+financial_data:
+  date_range: 2024-07-01 04:00:00 to 2026-04-09 04:00:00
+  days_covered: 647
+  features: 20
+  tickers:
+  - BWXT
+  - CCJ
+  - CEG
+  - LAC
+  - LEU
+  - LTBR
+  - NNE
+  - NXE
+  - SMR
+  total_records: 3992
+generated_at: '2026-04-09T15:20:05.512214'
+textual_data:
+  avg_text_length: !!python/object/apply:numpy._core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    HKjiQtnwVUA=
+  avg_token_count: !!python/object/apply:numpy._core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAAAAAAAgEA=
+  sources:
+    24/7 Wall St.: 8
+    AOL.com: 1
+    Al Jazeera: 1
+    Barchart: 2
+    Barron's: 2
+    Benzinga: 1
+    Bitget: 6
+    Bloomberg.com: 1
+    Business Insider: 1
+    Business Wire: 1
+    CMC Markets: 1
+    CNBC: 2
+    Capital.com: 1
+    CarbonCredits.com: 3
+    ChartMill: 2
+    CoinCentral: 1
+    Defense World: 1
+    ETF Trends: 1
+    Eastern Progress: 1
+    FinancialContent: 1
+    Finimize: 1
+    Finviz: 5
+    Forbes: 7
+    GlobeNewswire: 3
+    GuruFocus: 8
+    GuruFocus.com: 2
+    IndexBox: 1
+    Insider Monkey: 12
+    Intellectia AI: 1
+    Investing.com: 15
+    Investor's Business Daily: 12
+    Investorsobserver: 1
+    Invezz: 1
+    Kalkine Media: 1
+    MSN: 15
+    MarketBeat: 61
+    Meyka: 1
+    Moby: 1
+    Motley Fool: 11
+    NANO Nuclear Energy Inc.: 2
+    Nasdaq: 1
+    National Today: 1
+    NuScale Power: 2
+    PR Newswire: 6
+    Proactive: 2
+    Proactive financial news: 1
+    Quiver Quantitative: 10
+    Reuters: 2
+    Sahm: 2
+    Schaeffer's Investment Research: 2
+    Seeking Alpha: 43
+    Simply Wall St.: 22
+    Stock Titan: 66
+    StockInvest.us: 1
+    StockStory: 2
+    StocksToTrade: 4
+    Stocktwits: 1
+    TIKR.com: 10
+    TMX Newsfile: 3
+    "TechStock\xB2": 1
+    The Globe and Mail: 11
+    The Motley Fool: 99
+    TheStreet Pro: 4
+    TipRanks: 10
+    TradingView: 9
+    Trefis: 8
+    Yahoo Finance: 316
+    Yahoo Finance Australia: 1
+    Yahoo Finance UK: 3
+    Yahoo! Finance Canada: 6
+    Zacks: 8
+    Zacks Investment Research: 6
+    finviz: 565
+    fnspid: 24425
+    intelligentinvestor.com.au: 1
+    qz.com: 1
+    simplywall.st: 29
+    timothysykes.com: 2
+  total_articles: 25885

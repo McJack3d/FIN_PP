@@ -1,0 +1,15 @@
+{
+  "id": "alexandrebredillot/thes-sa-sentiment-nuclear-forecasting",
+  "title": "THES_SA: Sentiment-Driven Nuclear Equity Forecasting",
+  "code_file": "THES_SA/kaggle_notebook.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "elsabetyemane/financial-news-and-stock-price-integration-dataset"
+  ],
+  "competition_sources": [],
+  "enable_tpu": false
+}
